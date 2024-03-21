@@ -278,9 +278,17 @@ impl Tok {
     pub const TILDE: Self = Self(b'~');
     pub const HASH: Self = Self(b'#');
     pub const COMMA: Self = Self(b',');
-    pub const ASP: Self = Self(b'@');
     pub const COLON: Self = Self(b':');
     pub const EQU: Self = Self(b'=');
+
+    pub const A: Self = Self(b'A');
+    pub const B: Self = Self(b'B');
+    pub const C: Self = Self(b'C');
+    pub const D: Self = Self(b'D');
+    pub const E: Self = Self(b'E');
+    pub const H: Self = Self(b'H');
+    pub const L: Self = Self(b'L');
+    pub const Z: Self = Self(b'Z');
 
     pub const EOF: Self = Self(0x80);
     pub const IDENT: Self = Self(0x81);
@@ -297,6 +305,14 @@ impl Tok {
     pub const NEQ: Self = Self(0x8B); // !=
     pub const AND: Self = Self(0x8C); // &&
     pub const OR: Self = Self(0x8D);  // ||
+
+    pub const AF: Self = Self(0x8E); // AF
+    pub const BC: Self = Self(0x8F); // BC
+    pub const DE: Self = Self(0x90); // DE
+    pub const HL: Self = Self(0x91); // HL
+    pub const SP: Self = Self(0x92); // SP
+    pub const NC: Self = Self(0x93); // NC
+    pub const NZ: Self = Self(0x94); // NZ
 }
 
 #[derive(Debug, Clone, Copy)]

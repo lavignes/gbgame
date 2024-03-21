@@ -1451,6 +1451,13 @@ const GRAPHEMES: &[(&[u8; 2], Tok)] = &[
     (b"!=", Tok::NEQ),
     (b"&&", Tok::AND),
     (b"||", Tok::OR),
+    (b"AF", Tok::AF),
+    (b"BC", Tok::BC),
+    (b"DE", Tok::DE),
+    (b"HL", Tok::HL),
+    (b"SP", Tok::SP),
+    (b"NC", Tok::NC),
+    (b"NZ", Tok::NZ),
 ];
 
 trait TokStream<'a> {
@@ -1613,17 +1620,9 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.reader.eat();
                     self.string.push(c as char);
                 }
-                if self.string.len() > 1 {
-                    self.stash = Some(Tok::IDENT);
-                    return Ok(Tok::IDENT);
-                }
-                // the char wasn't an ident, so wasnt eaten
-                if self.string.len() == 0 {
-                    self.reader.eat();
-                }
                 // check for grapheme
                 if let Some(nc) = self.reader.peek()? {
-                    let s = &[c, nc];
+                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
                     if let Some(tok) = GRAPHEMES
                         .iter()
                         .find_map(|(bs, tok)| (*bs == s).then_some(tok))
@@ -1633,6 +1632,15 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                         self.stash = Some(tok);
                         return Ok(tok);
                     }
+                }
+                // must be an identifier
+                if self.string.len() > 1 {
+                    self.stash = Some(Tok::IDENT);
+                    return Ok(Tok::IDENT);
+                }
+                // the char wasn't an ident, so wasnt eaten
+                if self.string.len() == 0 {
+                    self.reader.eat();
                 }
                 // else return an uppercase of whatever this char is
                 self.stash = Some(Tok(c.to_ascii_uppercase()));
