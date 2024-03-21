@@ -272,8 +272,6 @@ impl Tok {
     pub const PIPE: Self = Self(b'|');
     pub const LPAREN: Self = Self(b'(');
     pub const RPAREN: Self = Self(b')');
-    pub const LBRACK: Self = Self(b'[');
-    pub const RBRACK: Self = Self(b']');
     pub const BANG: Self = Self(b'!');
     pub const TILDE: Self = Self(b'~');
     pub const HASH: Self = Self(b'#');

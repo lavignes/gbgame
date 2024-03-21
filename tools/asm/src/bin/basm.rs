@@ -959,25 +959,6 @@ impl<'a> Asm<'a> {
         scratch.last().copied()
     }
 
-    fn find_opcode(&self, addrs: &[u8; 23], addr: Addr) -> Option<u8> {
-        let op = addrs[addr.0 as usize];
-        if op == ____ {
-            return None;
-        }
-        Some(op)
-    }
-
-    fn check_opcode(&self, addrs: &[u8; 23], addr: Addr) -> io::Result<u8> {
-        let op = self
-            .find_opcode(addrs, addr)
-            .ok_or_else(|| self.err("illegal address mode"))?;
-        if !self.native_mode && NATIVE_OPCODES.contains(&op) {
-            Err(self.err("illegal instruction"))
-        } else {
-            Ok(op)
-        }
-    }
-
     fn expect(&mut self, tok: Tok) -> io::Result<()> {
         if self.peek()? != tok {
             return Err(self.err("unexpected garbage"));
@@ -1010,6 +991,110 @@ impl<'a> Asm<'a> {
         match mne {
             Mne::LD => {
                 self.eat();
+                if self.peek()? == Tok::LPAREN {
+                    self.eat();
+                    match self.peek()? {
+                        tok @ (Tok::BC | Tok::DE) => {
+                            self.eat();
+                            self.expect(Tok::RPAREN)?;
+                            self.expect(Tok::COMMA)?;
+                            self.expect(Tok::A)?;
+                            if self.emit {
+                                self.write(&[match tok {
+                                    Tok::BC => 0x02,
+                                    Tok::DE => 0x12,
+                                }])?;
+                            }
+                            return self.add_pc(1);
+                        }
+                        Tok::HL => {
+                            self.eat();
+                            self.expect(Tok::RPAREN)?;
+                            self.expect(Tok::COMMA)?;
+                            match self.peek()? {
+                                tok @ (Tok::A
+                                | Tok::B
+                                | Tok::C
+                                | Tok::D
+                                | Tok::E
+                                | Tok::H
+                                | Tok::L) => {
+                                    self.eat();
+                                    if self.emit {
+                                        self.write(&[match tok {
+                                            Tok::A => 0x77,
+                                            Tok::B => 0x70,
+                                            Tok::C => 0x71,
+                                            Tok::D => 0x72,
+                                            Tok::E => 0x73,
+                                            Tok::H => 0x74,
+                                            Tok::L => 0x75,
+                                        }])?;
+                                    }
+                                    return self.add_pc(1);
+                                }
+                                _ => {
+                                    let pos = self.tok().pos();
+                                    let expr = self.expr()?;
+                                    if self.emit {
+                                        self.write(&[0x36])?;
+                                        if let Ok(value) = self.const_expr(expr) {
+                                            self.write(&self.range_8(value)?.to_le_bytes());
+                                        } else {
+                                            self.write(&[0xFD]);
+                                            self.reloc(1, 1, expr, pos);
+                                        }
+                                    }
+                                    return self.add_pc(2);
+                                }
+                            }
+                        }
+                        Tok::C => {
+                            self.eat();
+                            self.expect(Tok::RPAREN)?;
+                            self.expect(Tok::COMMA)?;
+                            self.expect(Tok::A)?;
+                            if self.emit {
+                                self.write(&[0xE2])?;
+                            }
+                            return self.add_pc(1);
+                        }
+                        _ => {
+                            let pos = self.tok().pos();
+                            let expr = self.expr()?;
+                            self.expect(Tok::COMMA)?;
+                            if self.peek()? == Tok::SP {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[0x08])?;
+                                    if let Ok(value) = self.const_expr(expr) {
+                                        self.write(&self.range_16(value)?.to_le_bytes());
+                                    } else {
+                                        self.write(&[0xFD, 0xFD]);
+                                        self.reloc(1, 2, expr, pos);
+                                    }
+                                }
+                                return self.add_pc(3);
+                            }
+                            self.expect(Tok::A)?;
+                            if self.emit {
+                                self.write(&[0xEA])?;
+                                if let Ok(value) = self.const_expr(expr) {
+                                    self.write(&self.range_16(value)?.to_le_bytes());
+                                } else {
+                                    self.write(&[0xFD, 0xFD]);
+                                    self.reloc(1, 2, expr, pos);
+                                }
+                            }
+                            return self.add_pc(3);
+                        }
+                    }
+                }
+                if self.peek()? == Tok::A {
+                    self.eat();
+                    self.expect(Tok::COMMA)?;
+                    match self.peek()? {}
+                }
             }
             _ => todo!(),
         }
