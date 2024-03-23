@@ -257,7 +257,6 @@ pub enum Op {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Tok(pub u8);
 
-#[rustfmt::skip]
 impl Tok {
     pub const NEWLINE: Self = Self(b'\n');
     pub const MODULUS: Self = Self(b'%');
@@ -299,10 +298,10 @@ impl Tok {
     pub const LSR: Self = Self(0x87); // ~>
     pub const LTE: Self = Self(0x88); // <=
     pub const GTE: Self = Self(0x89); // >=
-    pub const EQ: Self = Self(0x8A);  // ==
+    pub const EQ: Self = Self(0x8A); // ==
     pub const NEQ: Self = Self(0x8B); // !=
     pub const AND: Self = Self(0x8C); // &&
-    pub const OR: Self = Self(0x8D);  // ||
+    pub const OR: Self = Self(0x8D); // ||
 
     pub const AF: Self = Self(0x8E); // AF
     pub const BC: Self = Self(0x8F); // BC

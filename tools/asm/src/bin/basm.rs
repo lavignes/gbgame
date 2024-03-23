@@ -8,10 +8,10 @@ use std::{
     str::FromStr,
 };
 
-use clap::Parser;
-use pasm::{
+use basm::{
     Expr, ExprNode, Label, Op, Pos, Reloc, RelocVal, Section, SliceInterner, StrInterner, Sym, Tok,
 };
+use clap::Parser;
 use tracing::Level;
 
 #[derive(Parser)]
@@ -506,7 +506,7 @@ impl<'a> Asm<'a> {
                 }
                 // must be an mnemonic
                 self.eat();
-                self.operand(mne.unwrap())?;
+                self.operand(*mne.unwrap())?;
             }
             self.eol()?;
         }
@@ -991,82 +991,353 @@ impl<'a> Asm<'a> {
         match mne {
             Mne::LD => {
                 self.eat();
-                if self.peek()? == Tok::LPAREN {
-                    self.eat();
-                    match self.peek()? {
-                        tok @ (Tok::BC | Tok::DE) => {
-                            self.eat();
-                            self.expect(Tok::RPAREN)?;
-                            self.expect(Tok::COMMA)?;
-                            self.expect(Tok::A)?;
-                            if self.emit {
-                                self.write(&[match tok {
-                                    Tok::BC => 0x02,
-                                    Tok::DE => 0x12,
-                                }])?;
-                            }
-                            return self.add_pc(1);
-                        }
-                        Tok::HL => {
-                            self.eat();
-                            self.expect(Tok::RPAREN)?;
-                            self.expect(Tok::COMMA)?;
-                            match self.peek()? {
-                                tok @ (Tok::A
-                                | Tok::B
-                                | Tok::C
-                                | Tok::D
-                                | Tok::E
-                                | Tok::H
-                                | Tok::L) => {
-                                    self.eat();
-                                    if self.emit {
-                                        self.write(&[match tok {
-                                            Tok::A => 0x77,
-                                            Tok::B => 0x70,
-                                            Tok::C => 0x71,
-                                            Tok::D => 0x72,
-                                            Tok::E => 0x73,
-                                            Tok::H => 0x74,
-                                            Tok::L => 0x75,
-                                        }])?;
-                                    }
-                                    return self.add_pc(1);
-                                }
-                                _ => {
-                                    let pos = self.tok().pos();
-                                    let expr = self.expr()?;
-                                    if self.emit {
-                                        self.write(&[0x36])?;
-                                        if let Ok(value) = self.const_expr(expr) {
-                                            self.write(&self.range_8(value)?.to_le_bytes());
-                                        } else {
-                                            self.write(&[0xFD]);
-                                            self.reloc(1, 1, expr, pos);
+                match self.peek()? {
+                    Tok::A => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        match self.peek()? {
+                            Tok::LPAREN => {
+                                self.eat();
+                                match self.peek()? {
+                                    tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::C) => {
+                                        self.eat();
+                                        self.expect(Tok::RPAREN)?;
+                                        if self.emit {
+                                            self.write(&[match tok {
+                                                Tok::BC => 0x0A,
+                                                Tok::DE => 0x1A,
+                                                Tok::HL => 0x7E,
+                                                Tok::C => 0xF2,
+                                                _ => unreachable!(),
+                                            }]);
                                         }
+                                        return self.add_pc(1);
                                     }
-                                    return self.add_pc(2);
+                                    _ => {
+                                        let pos = self.tok().pos();
+                                        let expr = self.expr()?;
+                                        self.expect(Tok::RPAREN)?;
+                                        if self.emit {
+                                            self.write(&[0xFA]);
+                                            if let Ok(value) = self.const_expr(expr) {
+                                                self.write(&self.range_16(value)?.to_le_bytes());
+                                            } else {
+                                                self.write(&[0xFD, 0xFD]);
+                                                self.reloc(1, 2, expr, pos);
+                                            }
+                                        }
+                                        return self.add_pc(3);
+                                    }
                                 }
                             }
-                        }
-                        Tok::C => {
-                            self.eat();
-                            self.expect(Tok::RPAREN)?;
-                            self.expect(Tok::COMMA)?;
-                            self.expect(Tok::A)?;
-                            if self.emit {
-                                self.write(&[0xE2])?;
-                            }
-                            return self.add_pc(1);
-                        }
-                        _ => {
-                            let pos = self.tok().pos();
-                            let expr = self.expr()?;
-                            self.expect(Tok::COMMA)?;
-                            if self.peek()? == Tok::SP {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
                                 self.eat();
                                 if self.emit {
-                                    self.write(&[0x08])?;
+                                    self.write(&[match tok {
+                                        Tok::A => 0x7F,
+                                        Tok::B => 0x78,
+                                        Tok::C => 0x79,
+                                        Tok::D => 0x7A,
+                                        Tok::E => 0x7B,
+                                        Tok::H => 0x7C,
+                                        Tok::L => 0x7D,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                let pos = self.tok().pos();
+                                let expr = self.expr()?;
+                                if self.emit {
+                                    self.write(&[0x3E]);
+                                    if let Ok(value) = self.const_expr(expr) {
+                                        self.write(&self.range_8(value)?.to_le_bytes());
+                                    } else {
+                                        self.write(&[0xFD]);
+                                        self.reloc(1, 1, expr, pos);
+                                    }
+                                }
+                                return self.add_pc(2);
+                            }
+                        }
+                    }
+
+                    Tok::B => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x47,
+                                        Tok::B => 0x40,
+                                        Tok::C => 0x41,
+                                        Tok::D => 0x42,
+                                        Tok::E => 0x43,
+                                        Tok::H => 0x44,
+                                        Tok::L => 0x45,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x46]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    Tok::C => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x4F,
+                                        Tok::B => 0x48,
+                                        Tok::C => 0x49,
+                                        Tok::D => 0x4A,
+                                        Tok::E => 0x4B,
+                                        Tok::H => 0x4C,
+                                        Tok::L => 0x4D,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x4E]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    Tok::D => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x57,
+                                        Tok::B => 0x50,
+                                        Tok::C => 0x51,
+                                        Tok::D => 0x52,
+                                        Tok::E => 0x53,
+                                        Tok::H => 0x54,
+                                        Tok::L => 0x55,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x56]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    Tok::E => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x5F,
+                                        Tok::B => 0x58,
+                                        Tok::C => 0x59,
+                                        Tok::D => 0x5A,
+                                        Tok::E => 0x5B,
+                                        Tok::H => 0x5C,
+                                        Tok::L => 0x5D,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x5E]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    Tok::H => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x67,
+                                        Tok::B => 0x60,
+                                        Tok::C => 0x61,
+                                        Tok::D => 0x62,
+                                        Tok::E => 0x63,
+                                        Tok::H => 0x64,
+                                        Tok::L => 0x65,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x66]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    Tok::L => {
+                        self.eat();
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x6F,
+                                        Tok::B => 0x68,
+                                        Tok::C => 0x69,
+                                        Tok::D => 0x6A,
+                                        Tok::E => 0x6B,
+                                        Tok::H => 0x6C,
+                                        Tok::L => 0x6D,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x6E]);
+                                }
+                                return self.add_pc(1);
+                            }
+                        }
+                    }
+
+                    _ => {
+                        self.eat();
+                        match self.peek()? {
+                            tok @ (Tok::BC | Tok::DE | Tok::C) => {
+                                self.eat();
+                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::COMMA)?;
+                                self.expect(Tok::A)?;
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::BC => 0x02,
+                                        Tok::DE => 0x12,
+                                        Tok::C => 0xE2,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            Tok::HL => {
+                                self.eat();
+                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::COMMA)?;
+                                match self.peek()? {
+                                    tok @ (Tok::A
+                                    | Tok::B
+                                    | Tok::C
+                                    | Tok::D
+                                    | Tok::E
+                                    | Tok::H
+                                    | Tok::L) => {
+                                        self.eat();
+                                        if self.emit {
+                                            self.write(&[match tok {
+                                                Tok::A => 0x77,
+                                                Tok::B => 0x70,
+                                                Tok::C => 0x71,
+                                                Tok::D => 0x72,
+                                                Tok::E => 0x73,
+                                                Tok::H => 0x74,
+                                                Tok::L => 0x75,
+                                                _ => unreachable!(),
+                                            }]);
+                                        }
+                                        return self.add_pc(1);
+                                    }
+                                    _ => {
+                                        let pos = self.tok().pos();
+                                        let expr = self.expr()?;
+                                        if self.emit {
+                                            self.write(&[0x36]);
+                                            if let Ok(value) = self.const_expr(expr) {
+                                                self.write(&self.range_8(value)?.to_le_bytes());
+                                            } else {
+                                                self.write(&[0xFD]);
+                                                self.reloc(1, 1, expr, pos);
+                                            }
+                                        }
+                                        return self.add_pc(2);
+                                    }
+                                }
+                            }
+                            _ => {
+                                let pos = self.tok().pos();
+                                let expr = self.expr()?;
+                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::COMMA)?;
+                                if self.peek()? == Tok::SP {
+                                    self.eat();
+                                    if self.emit {
+                                        self.write(&[0x08]);
+                                        if let Ok(value) = self.const_expr(expr) {
+                                            self.write(&self.range_16(value)?.to_le_bytes());
+                                        } else {
+                                            self.write(&[0xFD, 0xFD]);
+                                            self.reloc(1, 2, expr, pos);
+                                        }
+                                    }
+                                    return self.add_pc(3);
+                                }
+                                self.expect(Tok::A)?;
+                                if self.emit {
+                                    self.write(&[0xEA]);
                                     if let Ok(value) = self.const_expr(expr) {
                                         self.write(&self.range_16(value)?.to_le_bytes());
                                     } else {
@@ -1076,29 +1347,1374 @@ impl<'a> Asm<'a> {
                                 }
                                 return self.add_pc(3);
                             }
-                            self.expect(Tok::A)?;
-                            if self.emit {
-                                self.write(&[0xEA])?;
-                                if let Ok(value) = self.const_expr(expr) {
-                                    self.write(&self.range_16(value)?.to_le_bytes());
-                                } else {
-                                    self.write(&[0xFD, 0xFD]);
-                                    self.reloc(1, 2, expr, pos);
-                                }
-                            }
-                            return self.add_pc(3);
                         }
                     }
                 }
-                if self.peek()? == Tok::A {
-                    self.eat();
-                    self.expect(Tok::COMMA)?;
-                    match self.peek()? {}
+            }
+
+            Mne::LDD => {
+                self.eat();
+                match self.peek()? {
+                    Tok::A => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x3A]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::A)?;
+                        if self.emit {
+                            self.write(&[0x32]);
+                        }
+                        return self.add_pc(1);
+                    }
                 }
             }
-            _ => todo!(),
+
+            Mne::LDI => {
+                self.eat();
+                match self.peek()? {
+                    Tok::A => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x2A]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::A)?;
+                        if self.emit {
+                            self.write(&[0x22]);
+                        }
+                        return self.add_pc(1);
+                    }
+                }
+            }
+
+            Mne::LDH => {
+                self.eat();
+                match self.peek()? {
+                    Tok::A => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::LPAREN)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xF0]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::COMMA)?;
+                        self.expect(Tok::A)?;
+                        if self.emit {
+                            self.write(&[0xE0]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::PUSH => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::AF) => {
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::BC => 0xC5,
+                                Tok::DE => 0xD5,
+                                Tok::HL => 0xE5,
+                                Tok::AF => 0xF5,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                    }
+                    _ => return Err(self.err("invalid operand")),
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::POP => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::AF) => {
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::BC => 0xC1,
+                                Tok::DE => 0xD1,
+                                Tok::HL => 0xE1,
+                                Tok::AF => 0xF1,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                    }
+                    _ => return Err(self.err("invalid operand")),
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::ADD => {
+                self.eat();
+                match self.peek()? {
+                    Tok::HL => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        match self.peek()? {
+                            tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::SP) => {
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::BC => 0x09,
+                                        Tok::DE => 0x19,
+                                        Tok::HL => 0x29,
+                                        Tok::SP => 0x39,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                            }
+                            _ => return Err(self.err("invalid operand")),
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::SP => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xE8]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::A)?;
+                        self.expect(Tok::COMMA)?;
+                        match self.peek()? {
+                            tok
+                            @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                                self.eat();
+                                if self.emit {
+                                    self.write(&[match tok {
+                                        Tok::A => 0x87,
+                                        Tok::B => 0x80,
+                                        Tok::C => 0x81,
+                                        Tok::D => 0x82,
+                                        Tok::E => 0x83,
+                                        Tok::H => 0x84,
+                                        Tok::L => 0x85,
+                                        _ => unreachable!(),
+                                    }]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            Tok::LPAREN => {
+                                self.eat();
+                                self.expect(Tok::HL)?;
+                                self.expect(Tok::RPAREN)?;
+                                if self.emit {
+                                    self.write(&[0x86]);
+                                }
+                                return self.add_pc(1);
+                            }
+                            _ => {
+                                let pos = self.tok().pos();
+                                let expr = self.expr()?;
+                                if self.emit {
+                                    self.write(&[0xC6]);
+                                    if let Ok(value) = self.const_expr(expr) {
+                                        self.write(&self.range_8(value)?.to_le_bytes());
+                                    } else {
+                                        self.write(&[0xFD]);
+                                        self.reloc(1, 1, expr, pos);
+                                    }
+                                }
+                                return self.add_pc(2);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Mne::ADC => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0x8F,
+                                Tok::B => 0x88,
+                                Tok::C => 0x89,
+                                Tok::D => 0x8A,
+                                Tok::E => 0x8B,
+                                Tok::H => 0x8C,
+                                Tok::L => 0x8D,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x8E]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xCE]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SUB => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0x97,
+                                Tok::B => 0x90,
+                                Tok::C => 0x91,
+                                Tok::D => 0x92,
+                                Tok::E => 0x93,
+                                Tok::H => 0x94,
+                                Tok::L => 0x95,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x96]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xD6]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SBC => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0x9F,
+                                Tok::B => 0x98,
+                                Tok::C => 0x99,
+                                Tok::D => 0x9A,
+                                Tok::E => 0x9B,
+                                Tok::H => 0x9C,
+                                Tok::L => 0x9D,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x9E]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xDE]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::AND => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0xA7,
+                                Tok::B => 0xA0,
+                                Tok::C => 0xA1,
+                                Tok::D => 0xA2,
+                                Tok::E => 0xA3,
+                                Tok::H => 0xA4,
+                                Tok::L => 0xA5,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xA6]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xE6]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::OR => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0xB7,
+                                Tok::B => 0xB0,
+                                Tok::C => 0xB1,
+                                Tok::D => 0xB2,
+                                Tok::E => 0xB3,
+                                Tok::H => 0xB4,
+                                Tok::L => 0xB5,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xB6]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xF6]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::XOR => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0xAF,
+                                Tok::B => 0xA8,
+                                Tok::C => 0xA9,
+                                Tok::D => 0xAA,
+                                Tok::E => 0xAB,
+                                Tok::H => 0xAC,
+                                Tok::L => 0xAD,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xAE]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xEE]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::CP => {
+                self.eat();
+                self.expect(Tok::A)?;
+                self.expect(Tok::COMMA)?;
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::A => 0xBF,
+                                Tok::B => 0xB8,
+                                Tok::C => 0xB9,
+                                Tok::D => 0xBA,
+                                Tok::E => 0xBB,
+                                Tok::H => 0xBC,
+                                Tok::L => 0xBD,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    Tok::LPAREN => {
+                        self.eat();
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xBE]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xFE]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_8(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD]);
+                                self.reloc(1, 1, expr, pos);
+                            }
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::INC => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::BC
+                    | Tok::DE
+                    | Tok::HL
+                    | Tok::SP
+                    | Tok::A
+                    | Tok::B
+                    | Tok::C
+                    | Tok::D
+                    | Tok::E
+                    | Tok::H
+                    | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::BC => 0x03,
+                                Tok::DE => 0x13,
+                                Tok::HL => 0x23,
+                                Tok::SP => 0x33,
+                                Tok::A => 0x3C,
+                                Tok::B => 0x04,
+                                Tok::C => 0x0C,
+                                Tok::D => 0x14,
+                                Tok::E => 0x1C,
+                                Tok::H => 0x24,
+                                Tok::L => 0x2C,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x34]);
+                        }
+                        return self.add_pc(1);
+                    }
+                }
+            }
+
+            Mne::DEC => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::BC
+                    | Tok::DE
+                    | Tok::HL
+                    | Tok::SP
+                    | Tok::A
+                    | Tok::B
+                    | Tok::C
+                    | Tok::D
+                    | Tok::E
+                    | Tok::H
+                    | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::BC => 0x0B,
+                                Tok::DE => 0x1B,
+                                Tok::HL => 0x2B,
+                                Tok::SP => 0x3B,
+                                Tok::A => 0x3D,
+                                Tok::B => 0x05,
+                                Tok::C => 0x0D,
+                                Tok::D => 0x15,
+                                Tok::E => 0x1D,
+                                Tok::H => 0x25,
+                                Tok::L => 0x2D,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0x35]);
+                        }
+                        return self.add_pc(1);
+                    }
+                }
+            }
+
+            Mne::SWAP => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x37,
+                                    Tok::B => 0x30,
+                                    Tok::C => 0x31,
+                                    Tok::D => 0x32,
+                                    Tok::E => 0x33,
+                                    Tok::H => 0x34,
+                                    Tok::L => 0x35,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x36]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::DAA => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x27]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::CPL => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x2F]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::CCF => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x3F]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::SCF => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x37]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::NOP => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x00]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::HALT => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x76]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::STOP => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x10, 0x00]);
+                }
+                return self.add_pc(2);
+            }
+
+            Mne::DI => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0xF3]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::EI => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0xFB]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RLCA => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x07]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RLA => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x17]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RRCA => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x0F]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RRA => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0x1F]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RLC => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x07,
+                                    Tok::B => 0x00,
+                                    Tok::C => 0x01,
+                                    Tok::D => 0x02,
+                                    Tok::E => 0x03,
+                                    Tok::H => 0x04,
+                                    Tok::L => 0x05,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x06]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::RL => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x17,
+                                    Tok::B => 0x10,
+                                    Tok::C => 0x11,
+                                    Tok::D => 0x12,
+                                    Tok::E => 0x13,
+                                    Tok::H => 0x14,
+                                    Tok::L => 0x15,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x16]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::RRC => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x0F,
+                                    Tok::B => 0x08,
+                                    Tok::C => 0x09,
+                                    Tok::D => 0x0A,
+                                    Tok::E => 0x0B,
+                                    Tok::H => 0x0C,
+                                    Tok::L => 0x0D,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x0E]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::RR => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x1F,
+                                    Tok::B => 0x18,
+                                    Tok::C => 0x19,
+                                    Tok::D => 0x1A,
+                                    Tok::E => 0x1B,
+                                    Tok::H => 0x1C,
+                                    Tok::L => 0x1D,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x1E]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SLA => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x27,
+                                    Tok::B => 0x20,
+                                    Tok::C => 0x21,
+                                    Tok::D => 0x22,
+                                    Tok::E => 0x23,
+                                    Tok::H => 0x24,
+                                    Tok::L => 0x25,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x26]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SRA => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x2F,
+                                    Tok::B => 0x28,
+                                    Tok::C => 0x29,
+                                    Tok::D => 0x2A,
+                                    Tok::E => 0x2B,
+                                    Tok::H => 0x2C,
+                                    Tok::L => 0x2D,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x2E]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SRL => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                match tok {
+                                    Tok::A => 0x3F,
+                                    Tok::B => 0x38,
+                                    Tok::C => 0x39,
+                                    Tok::D => 0x3A,
+                                    Tok::E => 0x3B,
+                                    Tok::H => 0x3C,
+                                    Tok::L => 0x3D,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, 0x3E]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::BIT => {
+                self.eat();
+                let pos = self.tok().pos();
+                let expr = self.expr()?;
+                let expr = self.const_expr(expr)?;
+                if expr > 7 {
+                    return Err(self.err("invalid bit index"));
+                }
+                let base = match expr {
+                    0 => 0x40,
+                    1 => 0x48,
+                    2 => 0x50,
+                    3 => 0x58,
+                    4 => 0x60,
+                    5 => 0x68,
+                    6 => 0x70,
+                    7 => 0x78,
+                    _ => unreachable!(),
+                };
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                base + match tok {
+                                    Tok::A => 0x07,
+                                    Tok::B => 0x00,
+                                    Tok::C => 0x01,
+                                    Tok::D => 0x02,
+                                    Tok::E => 0x03,
+                                    Tok::H => 0x04,
+                                    Tok::L => 0x05,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, base + 0x06]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::SET => {
+                self.eat();
+                let pos = self.tok().pos();
+                let expr = self.expr()?;
+                let expr = self.const_expr(expr)?;
+                if expr > 7 {
+                    return Err(self.err("invalid bit index"));
+                }
+                let base = match expr {
+                    0 => 0xC0,
+                    1 => 0xC8,
+                    2 => 0xD0,
+                    3 => 0xD8,
+                    4 => 0xE0,
+                    5 => 0xE8,
+                    6 => 0xF0,
+                    7 => 0xF8,
+                    _ => unreachable!(),
+                };
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                base + match tok {
+                                    Tok::A => 0x07,
+                                    Tok::B => 0x00,
+                                    Tok::C => 0x01,
+                                    Tok::D => 0x02,
+                                    Tok::E => 0x03,
+                                    Tok::H => 0x04,
+                                    Tok::L => 0x05,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, base + 0x06]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::RES => {
+                self.eat();
+                let pos = self.tok().pos();
+                let expr = self.expr()?;
+                let expr = self.const_expr(expr)?;
+                if expr > 7 {
+                    return Err(self.err("invalid bit index"));
+                }
+                let base = match expr {
+                    0 => 0x80,
+                    1 => 0x88,
+                    2 => 0x90,
+                    3 => 0x98,
+                    4 => 0xA0,
+                    5 => 0xA8,
+                    6 => 0xB0,
+                    7 => 0xB8,
+                    _ => unreachable!(),
+                };
+                match self.peek()? {
+                    tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[
+                                0xCB,
+                                base + match tok {
+                                    Tok::A => 0x07,
+                                    Tok::B => 0x00,
+                                    Tok::C => 0x01,
+                                    Tok::D => 0x02,
+                                    Tok::E => 0x03,
+                                    Tok::H => 0x04,
+                                    Tok::L => 0x05,
+                                    _ => unreachable!(),
+                                },
+                            ]);
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::HL)?;
+                        self.expect(Tok::RPAREN)?;
+                        if self.emit {
+                            self.write(&[0xCB, base + 0x06]);
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::JP => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::C => 0xDA,
+                                Tok::Z => 0xCA,
+                                Tok::NC => 0xD2,
+                                Tok::NZ => 0xC2,
+                                _ => unreachable!(),
+                            }]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_16(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD, 0xFD]);
+                                self.reloc(1, 2, expr, pos);
+                            }
+                        }
+                        return self.add_pc(3);
+                    }
+                    Tok::HL => {
+                        self.eat();
+                        if self.emit {
+                            self.write(&[0xE9]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xC3]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_16(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD, 0xFD]);
+                                self.reloc(1, 2, expr, pos);
+                            }
+                        }
+                        return self.add_pc(3);
+                    }
+                }
+            }
+
+            Mne::JR => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            let branch = self
+                                .const_branch_expr(expr)?
+                                .wrapping_sub((self.pc() as i32).wrapping_add(2));
+                            if (branch < (i8::MIN as i32)) || (branch > (i8::MAX as i32)) {
+                                return Err(self.err("branch distance too far"));
+                            }
+                            self.write(&[match tok {
+                                Tok::C => 0x38,
+                                Tok::Z => 0x28,
+                                Tok::NC => 0x30,
+                                Tok::NZ => 0x20,
+                                _ => unreachable!(),
+                            }]);
+                            self.write(&(branch as i8).to_le_bytes());
+                        }
+                        return self.add_pc(2);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            let branch = self
+                                .const_branch_expr(expr)?
+                                .wrapping_sub((self.pc() as i32).wrapping_add(2));
+                            if (branch < (i8::MIN as i32)) || (branch > (i8::MAX as i32)) {
+                                return Err(self.err("branch distance too far"));
+                            }
+                            self.write(&[0x18]);
+                            self.write(&(branch as i8).to_le_bytes());
+                        }
+                        return self.add_pc(2);
+                    }
+                }
+            }
+
+            Mne::CALL => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::C => 0xDC,
+                                Tok::Z => 0xCC,
+                                Tok::NC => 0xD4,
+                                Tok::NZ => 0xC4,
+                                _ => unreachable!(),
+                            }]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_16(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD, 0xFD]);
+                                self.reloc(1, 2, expr, pos);
+                            }
+                        }
+                        return self.add_pc(3);
+                    }
+                    _ => {
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[0xCD]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_16(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD, 0xFD]);
+                                self.reloc(1, 2, expr, pos);
+                            }
+                        }
+                        return self.add_pc(3);
+                    }
+                }
+            }
+
+            Mne::RST => {
+                self.eat();
+                let pos = self.tok().pos();
+                let expr = self.expr()?;
+                if self.emit {
+                    let expr = self.const_expr(expr)?;
+                    self.write(&[match expr {
+                        0x00 => 0xC7,
+                        0x08 => 0xCF,
+                        0x10 => 0xD7,
+                        0x18 => 0xDF,
+                        0x20 => 0xE7,
+                        0x28 => 0xEF,
+                        0x30 => 0xF7,
+                        0x38 => 0xFF,
+                        _ => return Err(self.err("invalid rst address")),
+                    }]);
+                }
+                return self.add_pc(1);
+            }
+
+            Mne::RET => {
+                self.eat();
+                match self.peek()? {
+                    tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::C => 0xD8,
+                                Tok::Z => 0xC8,
+                                Tok::NC => 0xD0,
+                                Tok::NZ => 0xC0,
+                                _ => unreachable!(),
+                            }]);
+                        }
+                        return self.add_pc(1);
+                    }
+                    _ => {
+                        if self.emit {
+                            self.write(&[0xC9]);
+                        }
+                        return self.add_pc(1);
+                    }
+                }
+            }
+
+            Mne::RETI => {
+                self.eat();
+                if self.emit {
+                    self.write(&[0xD9]);
+                }
+                return self.add_pc(1);
+            }
+
+            _ => unreachable!(),
         }
-        Ok(())
     }
 
     fn directive(&mut self, dir: Dir) -> io::Result<()> {
@@ -1119,7 +2735,7 @@ impl<'a> Asm<'a> {
                             if let Ok(value) = self.const_expr(expr) {
                                 self.write(&self.range_8(value)?.to_le_bytes());
                             } else {
-                                self.write(&[0x42]);
+                                self.write(&[0x0FD]);
                                 self.reloc(0, 1, expr, pos);
                             }
                         }
@@ -1140,7 +2756,7 @@ impl<'a> Asm<'a> {
                         if let Ok(value) = self.const_expr(expr) {
                             self.write(&self.range_16(value)?.to_le_bytes());
                         } else {
-                            self.write(&[0x42, 0x42]);
+                            self.write(&[0xFD, 0xFD]);
                             self.reloc(0, 2, expr, pos);
                         }
                     }
@@ -1160,7 +2776,7 @@ impl<'a> Asm<'a> {
                         if let Ok(value) = self.const_expr(expr) {
                             self.write(&self.range_24(value)?.to_le_bytes());
                         } else {
-                            self.write(&[0x42, 0x42, 0x42]);
+                            self.write(&[0xFD, 0xFD, 0xFD]);
                             self.reloc(0, 3, expr, pos);
                         }
                     }
@@ -1378,7 +2994,7 @@ impl<'a> Asm<'a> {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Mne(&'static str); // I really only newtype these to create namespaces
 
 impl Mne {
@@ -1705,9 +3321,10 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.reader.eat();
                     self.string.push(c as char);
                 }
-                // check for grapheme
-                if let Some(nc) = self.reader.peek()? {
-                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
+                // the string might be grapheme
+                if self.string.len() == 2 {
+                    let s = self.string.as_bytes();
+                    let s = &[s[0].to_ascii_uppercase(), s[1].to_ascii_uppercase()];
                     if let Some(tok) = GRAPHEMES
                         .iter()
                         .find_map(|(bs, tok)| (*bs == s).then_some(tok))
@@ -1724,8 +3341,19 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     return Ok(Tok::IDENT);
                 }
                 // the char wasn't an ident, so wasnt eaten
-                if self.string.len() == 0 {
-                    self.reader.eat();
+                self.reader.eat();
+                // check for grapheme
+                if let Some(nc) = self.reader.peek()? {
+                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
+                    if let Some(tok) = GRAPHEMES
+                        .iter()
+                        .find_map(|(bs, tok)| (*bs == s).then_some(tok))
+                        .copied()
+                    {
+                        self.reader.eat();
+                        self.stash = Some(tok);
+                        return Ok(tok);
+                    }
                 }
                 // else return an uppercase of whatever this char is
                 self.stash = Some(Tok(c.to_ascii_uppercase()));

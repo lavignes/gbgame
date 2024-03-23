@@ -1,0 +1,12 @@
+[MEMORY]
+VECTORS = { start = "$0000", size = "$100", type = "ro", fill = "$00" }
+GBC_HEADER = { start = "$0100", size = "$50", type = "ro", fill = "$00" }
+HOME = { start = "$0150", size = "$7EB0", type = "ro", fill = "$00" }
+BANK1 = { start = "$8000", size = "$8000", type = "ro", fill = "$00" }
+
+[SECTIONS]
+VECTORS = { load = "VECTORS", type = "ro" }
+GBC_HEADER = { load = "GBC_HEADER", type = "ro" }
+HOME = { load = "HOME", type = "ro", tags = { bank = "$00" } }
+BANK1 = { load = "BANK1", type = "ro", tags = { bank = "$01" } }
+
