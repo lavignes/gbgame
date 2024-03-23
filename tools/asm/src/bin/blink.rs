@@ -35,9 +35,9 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Output file for Mesen debug symbols
-    #[arg(long = "gMLB")]
-    debug_mesen: Option<PathBuf>,
+    /// Output file for SYM debug symbol file
+    #[arg(short = 'g')]
+    debug: Option<PathBuf>,
 
     /// Pre-defined symbols (repeatable)
     #[arg(short = 'D', long, value_name="KEY1=val", value_parser = parse_defines::<String, i32>)]
@@ -185,7 +185,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 Expr::Addr(section, pc) => {
                     let section = ld.sections.iter().find(|sec| sec.name == section).unwrap();
                     let value = pc + section.pc;
-                    debug_addrs.insert(ld.syms[i].label.to_string(), value);
+                    debug_addrs.insert(ld.syms[i].label, value);
                     Expr::Const(value as i32)
                 }
                 Expr::List(expr) => {
@@ -319,16 +319,24 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    if let Some(path) = args.debug_mesen {
-        tracing::trace!("writing mesen debug symbols");
+    if let Some(path) = args.debug {
+        tracing::trace!("writing debug symbols");
         let mut file = File::options()
             .write(true)
             .create(true)
             .truncate(true)
             .open(path)
             .map_err(|e| format!("cant open file: {e}"))?;
-        for (name, value) in debug_addrs {
-            writeln!(file, "PRG:{value:X}:{name}")?;
+        for (label, value) in debug_addrs {
+            let sym = ld.syms.iter().find(|sym| sym.label == label).unwrap();
+            let tags = &config.sections[sym.section].tags.as_ref();
+            if let Some(tags) = tags {
+                if let Some(bank) = tags.get("bank") {
+                    writeln!(file, "{bank:02X}:{value:04X} {}", label.to_string())?;
+                    continue;
+                }
+            }
+            writeln!(file, "{value:04X} {}", label.to_string())?;
         }
     }
 
@@ -702,7 +710,7 @@ impl<'a> Ld<'a> {
                     let sym = self.syms.iter().find(|sym| {
                         (sym.label == label) && ((sym.unit == unit) || (sym.unit == "__EXPORT__"))
                     })?;
-                    let tags = sections.get(sym.section).unwrap().tags.as_ref();
+                    let tags = sections[sym.section].tags.as_ref();
                     let value = tags?.get(tag)?;
                     scratch.push(*value);
                 }

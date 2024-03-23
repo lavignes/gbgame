@@ -1,3 +1,4 @@
+; vim: ft=basm
 ?section "HOME"
 
 ?export Start

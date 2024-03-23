@@ -226,7 +226,7 @@ impl<'a> Sym<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Label<'a> {
     pub scope: Option<&'a str>,
     pub string: &'a str,

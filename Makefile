@@ -9,7 +9,7 @@ OBJS := $(SRCS:.asm=.o)
 
 LOG_LEVEL := ERROR
 ASM_FLAGS := -l $(LOG_LEVEL)
-LD_FLAGS := -c link.toml -l $(LOG_LEVEL)
+LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym
 
 all: toolchain game.gbc
 
@@ -30,5 +30,6 @@ deepclean: clean
 clean:
 	rm -f $(call rwildcard,src,*.o)
 	rm -f game.gbc
+	rm -f game.sym
 
 
