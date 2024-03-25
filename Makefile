@@ -8,7 +8,7 @@ SRCS := $(call rwildcard,src,*.asm)
 OBJS := $(SRCS:.asm=.o)
 
 LOG_LEVEL := ERROR
-ASM_FLAGS := -l $(LOG_LEVEL)
+ASM_FLAGS := -l $(LOG_LEVEL) -I include
 LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym
 
 all: toolchain game.gbc

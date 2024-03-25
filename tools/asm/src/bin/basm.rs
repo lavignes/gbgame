@@ -9,7 +9,8 @@ use std::{
 };
 
 use basm::{
-    Expr, ExprNode, Label, Op, Pos, Reloc, RelocVal, Section, SliceInterner, StrInterner, Sym, Tok,
+    Expr, ExprNode, Label, Op, Pos, Reloc, RelocVal, Section, SliceInterner, StrInterner, Sym,
+    SymFlags, Tok,
 };
 use clap::Parser;
 use tracing::Level;
@@ -27,6 +28,10 @@ struct Args {
     /// Pre-defined symbols (repeatable)
     #[arg(short = 'D', long, value_name="KEY1=val", value_parser = parse_defines::<String, i32>)]
     define: Vec<(String, i32)>,
+
+    /// Search directories for included files
+    #[arg(short = 'I', long)]
+    include: Vec<PathBuf>,
 
     /// One of `TRACE`, `DEBUG`, `INFO`, `WARN`, or `ERROR`
     #[arg(short, long, default_value_t = Level::INFO)]
@@ -67,7 +72,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     let file = File::open(input).map_err(|e| format!("cant open file: {e}"))?;
     let lexer = Lexer::new(file, input);
 
-    let mut asm = Asm::new(lexer);
+    let mut asm = Asm::new(lexer, args.include);
     asm.str_int.intern(input); // dont forget to intern the input name
     let def_file_section = asm.str_int.intern("__DEFINES__");
     let def_unit = asm.str_int.intern("__STATIC__");
@@ -80,6 +85,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             def_file_section,
             def_file_section,
             Pos(0, 0),
+            SymFlags::NONE,
         ));
     }
 
@@ -216,6 +222,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         output.write_all(&sym.file.len().to_le_bytes())?;
         output.write_all(&sym.pos.0.to_le_bytes())?;
         output.write_all(&sym.pos.1.to_le_bytes())?;
+        output.write_all(&sym.flags.to_le_bytes())?;
     }
     // filter out empty sections
     let count = &asm
@@ -313,6 +320,7 @@ struct Asm<'a> {
     scope: Option<&'a str>,
     emit: bool,
     if_level: usize,
+    includes: Vec<PathBuf>,
 
     macros: Vec<Macro<'a>>,
 
@@ -321,7 +329,7 @@ struct Asm<'a> {
 }
 
 impl<'a> Asm<'a> {
-    fn new<R: Read + Seek + 'static>(lexer: Lexer<'a, R>) -> Self {
+    fn new<R: Read + Seek + 'static>(lexer: Lexer<'a, R>, includes: Vec<PathBuf>) -> Self {
         let mut str_int = StrInterner::new();
         let code = str_int.intern("__CODE__");
         Self {
@@ -338,6 +346,7 @@ impl<'a> Asm<'a> {
             scope: None,
             emit: false,
             if_level: 0,
+            includes,
 
             macros: Vec::new(),
 
@@ -356,7 +365,6 @@ impl<'a> Asm<'a> {
         self.scope = None;
         self.emit = true;
         self.if_level = 0;
-        self.macros.clear();
         Ok(())
     }
 
@@ -385,7 +393,7 @@ impl<'a> Asm<'a> {
                 let mne = MNEMONICS.iter().find(|mne| self.str_like(mne.0));
                 let dir = DIRECTIVES.iter().find(|dir| self.str_like(dir.0));
                 // is this a label?
-                if mne.is_none() && dir.is_none() && !self.str_like("?MACRO") {
+                if mne.is_none() && dir.is_none() {
                     let file = self.tok().file();
                     let pos = self.tok().pos();
                     // is this a defined macro?
@@ -423,7 +431,6 @@ impl<'a> Asm<'a> {
 
                     let string = self.str_intern();
                     let label = if !self.str().starts_with(".") {
-                        self.scope.replace(string);
                         Label::new(None, string)
                     } else {
                         Label::new(self.scope, string)
@@ -435,16 +442,6 @@ impl<'a> Asm<'a> {
                         self.eat();
                     }
 
-                    // being defined to a macro?
-                    if (self.peek()? == Tok::IDENT) && self.str_like("?MACRO") {
-                        if label.string.starts_with(".") {
-                            return Err(self.err("macro must be global"));
-                        }
-                        self.eat();
-                        self.macrodef(label)?;
-                        self.eol()?;
-                        continue;
-                    }
                     let index = if let Some(item) = self
                         .syms
                         .iter()
@@ -470,6 +467,7 @@ impl<'a> Asm<'a> {
                             section,
                             self.tok().file(),
                             pos,
+                            SymFlags::NONE,
                         ));
                         index
                     };
@@ -480,8 +478,10 @@ impl<'a> Asm<'a> {
                         // equ's must always be const, either on the first or second pass
                         if self.emit {
                             self.syms[index].value = Expr::Const(self.const_expr(expr)?);
+                            self.syms[index].flags |= SymFlags::EQU;
                         } else if let Expr::Const(expr) = expr {
                             self.syms[index].value = Expr::Const(expr);
+                            self.syms[index].flags |= SymFlags::EQU;
                         } else {
                             // we couldn't evaluate this yet, so remove it
                             self.syms.pop();
@@ -489,6 +489,11 @@ impl<'a> Asm<'a> {
                         self.eol()?;
                         continue;
                     }
+                    // set the scope
+                    if !string.starts_with(".") {
+                        self.scope.replace(string);
+                    }
+
                     // otherwise it is a pointer to the current PC
                     let section = self.sections[self.section].name;
                     self.syms[index].value = Expr::Addr(section, self.pc());
@@ -996,12 +1001,12 @@ impl<'a> Asm<'a> {
                         self.eat();
                         self.expect(Tok::COMMA)?;
                         match self.peek()? {
-                            Tok::LPAREN => {
+                            Tok::LBRACKET => {
                                 self.eat();
                                 match self.peek()? {
                                     tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::C) => {
                                         self.eat();
-                                        self.expect(Tok::RPAREN)?;
+                                        self.expect(Tok::RBRACKET)?;
                                         if self.emit {
                                             self.write(&[match tok {
                                                 Tok::BC => 0x0A,
@@ -1016,7 +1021,7 @@ impl<'a> Asm<'a> {
                                     _ => {
                                         let pos = self.tok().pos();
                                         let expr = self.expr()?;
-                                        self.expect(Tok::RPAREN)?;
+                                        self.expect(Tok::RBRACKET)?;
                                         if self.emit {
                                             self.write(&[0xFA]);
                                             if let Ok(value) = self.const_expr(expr) {
@@ -1066,6 +1071,7 @@ impl<'a> Asm<'a> {
 
                     Tok::B => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1085,9 +1091,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x46]);
                                 }
@@ -1098,6 +1104,7 @@ impl<'a> Asm<'a> {
 
                     Tok::C => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1117,9 +1124,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x4E]);
                                 }
@@ -1130,6 +1137,7 @@ impl<'a> Asm<'a> {
 
                     Tok::D => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1149,9 +1157,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x56]);
                                 }
@@ -1162,6 +1170,7 @@ impl<'a> Asm<'a> {
 
                     Tok::E => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1181,9 +1190,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x5E]);
                                 }
@@ -1194,6 +1203,7 @@ impl<'a> Asm<'a> {
 
                     Tok::H => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1213,9 +1223,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x66]);
                                 }
@@ -1226,6 +1236,7 @@ impl<'a> Asm<'a> {
 
                     Tok::L => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok
                             @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
@@ -1245,9 +1256,9 @@ impl<'a> Asm<'a> {
                                 return self.add_pc(1);
                             }
                             _ => {
-                                self.expect(Tok::LPAREN)?;
+                                self.expect(Tok::LBRACKET)?;
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x6E]);
                                 }
@@ -1258,10 +1269,11 @@ impl<'a> Asm<'a> {
 
                     _ => {
                         self.eat();
+                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok @ (Tok::BC | Tok::DE | Tok::C) => {
                                 self.eat();
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 self.expect(Tok::COMMA)?;
                                 self.expect(Tok::A)?;
                                 if self.emit {
@@ -1276,7 +1288,7 @@ impl<'a> Asm<'a> {
                             }
                             Tok::HL => {
                                 self.eat();
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 self.expect(Tok::COMMA)?;
                                 match self.peek()? {
                                     tok @ (Tok::A
@@ -1320,7 +1332,7 @@ impl<'a> Asm<'a> {
                             _ => {
                                 let pos = self.tok().pos();
                                 let expr = self.expr()?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 self.expect(Tok::COMMA)?;
                                 if self.peek()? == Tok::SP {
                                     self.eat();
@@ -1358,18 +1370,18 @@ impl<'a> Asm<'a> {
                     Tok::A => {
                         self.eat();
                         self.expect(Tok::COMMA)?;
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x3A]);
                         }
                         return self.add_pc(1);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         self.expect(Tok::COMMA)?;
                         self.expect(Tok::A)?;
                         if self.emit {
@@ -1386,18 +1398,18 @@ impl<'a> Asm<'a> {
                     Tok::A => {
                         self.eat();
                         self.expect(Tok::COMMA)?;
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x2A]);
                         }
                         return self.add_pc(1);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         self.expect(Tok::COMMA)?;
                         self.expect(Tok::A)?;
                         if self.emit {
@@ -1414,10 +1426,10 @@ impl<'a> Asm<'a> {
                     Tok::A => {
                         self.eat();
                         self.expect(Tok::COMMA)?;
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         let pos = self.tok().pos();
                         let expr = self.expr()?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xF0]);
                             if let Ok(value) = self.const_expr(expr) {
@@ -1430,10 +1442,10 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         let pos = self.tok().pos();
                         let expr = self.expr()?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         self.expect(Tok::COMMA)?;
                         self.expect(Tok::A)?;
                         if self.emit {
@@ -1547,10 +1559,10 @@ impl<'a> Asm<'a> {
                                 }
                                 return self.add_pc(1);
                             }
-                            Tok::LPAREN => {
+                            Tok::LBRACKET => {
                                 self.eat();
                                 self.expect(Tok::HL)?;
-                                self.expect(Tok::RPAREN)?;
+                                self.expect(Tok::RBRACKET)?;
                                 if self.emit {
                                     self.write(&[0x86]);
                                 }
@@ -1596,10 +1608,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x8E]);
                         }
@@ -1643,10 +1655,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x96]);
                         }
@@ -1690,10 +1702,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x9E]);
                         }
@@ -1737,10 +1749,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xA6]);
                         }
@@ -1784,10 +1796,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xB6]);
                         }
@@ -1831,10 +1843,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xAE]);
                         }
@@ -1878,10 +1890,10 @@ impl<'a> Asm<'a> {
                         }
                         return self.add_pc(1);
                     }
-                    Tok::LPAREN => {
+                    Tok::LBRACKET => {
                         self.eat();
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xBE]);
                         }
@@ -1938,9 +1950,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(1);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x34]);
                         }
@@ -1983,9 +1995,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(1);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0x35]);
                         }
@@ -2017,9 +2029,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x36]);
                         }
@@ -2155,9 +2167,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x06]);
                         }
@@ -2189,9 +2201,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x16]);
                         }
@@ -2223,9 +2235,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x0E]);
                         }
@@ -2257,9 +2269,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x1E]);
                         }
@@ -2291,9 +2303,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x26]);
                         }
@@ -2325,9 +2337,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x2E]);
                         }
@@ -2359,9 +2371,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, 0x3E]);
                         }
@@ -2410,9 +2422,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, base + 0x06]);
                         }
@@ -2461,9 +2473,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, base + 0x06]);
                         }
@@ -2512,9 +2524,9 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        self.expect(Tok::LPAREN)?;
+                        self.expect(Tok::LBRACKET)?;
                         self.expect(Tok::HL)?;
-                        self.expect(Tok::RPAREN)?;
+                        self.expect(Tok::RBRACKET)?;
                         if self.emit {
                             self.write(&[0xCB, base + 0x06]);
                         }
@@ -2820,9 +2832,8 @@ impl<'a> Asm<'a> {
                         return Err(self.err("exports must be global"));
                     }
                     if self.emit {
-                        let label = Label::new(None, string);
                         let unit = self.str_int.intern("__EXPORT__");
-                        if let Some(sym) = self.syms.iter_mut().find(|sym| &sym.label == &label) {
+                        if let Some(sym) = self.syms.iter_mut().find(|sym| sym.label == string) {
                             if sym.unit == unit {
                                 return Err(self.err("symbol is already exported"));
                             }
@@ -2868,7 +2879,26 @@ impl<'a> Asm<'a> {
                     return Err(self.err("expected file name"));
                 }
                 let name = self.str();
-                let name = fs::canonicalize(name)?;
+                let name = if let Ok(name) = fs::canonicalize(name) {
+                    name
+                } else {
+                    let mut base = PathBuf::from_str(self.tok().file()).unwrap();
+                    base.pop();
+                    base.push(name);
+                    // try current directory
+                    if let Ok(name) = fs::canonicalize(name) {
+                        name
+                    } else if let Some(name) = self.includes.iter().find_map(|path| {
+                        // try every include directory
+                        let mut base = path.clone();
+                        base.push(name);
+                        fs::canonicalize(base).ok()
+                    }) {
+                        name
+                    } else {
+                        return Err(self.err("file not found"));
+                    }
+                };
                 let name = self.str_int.intern(name.to_str().unwrap());
                 let file = File::open(name)?;
                 self.eat();
@@ -2891,7 +2921,7 @@ impl<'a> Asm<'a> {
                             if self.str_like(Dir::IF.0)
                                 || self.str_like(Dir::IFDEF.0)
                                 || self.str_like(Dir::IFNDEF.0)
-                                || self.str_like("?MACRO")
+                                || self.str_like(Dir::MACRO.0)
                             {
                                 if_level += 1;
                             } else if self.str_like(Dir::END.0) {
@@ -2945,12 +2975,26 @@ impl<'a> Asm<'a> {
                 let res = self.range_24(expr)?;
                 self.add_pc(res)?;
             }
+            Dir::MACRO => {
+                self.eat();
+                if self.peek()? != Tok::IDENT {
+                    return Err(self.err("expected macro name"));
+                }
+                let string = self.str_intern();
+                if string.starts_with(".") {
+                    return Err(self.err("macro must be global"));
+                }
+                self.eat();
+                self.macrodef(Label::new(None, string))?;
+            }
             _ => unreachable!(),
         }
         Ok(())
     }
 
     fn macrodef(&mut self, label: Label<'a>) -> io::Result<()> {
+        // TODO: check if macro is already defined
+        // if we are in the emit pass then its safe to skip
         self.eol()?;
         let mut toks = Vec::new();
         let mut if_level = 0;
@@ -2959,7 +3003,7 @@ impl<'a> Asm<'a> {
                 if self.str_like(Dir::IF.0)
                     || self.str_like(Dir::IFDEF.0)
                     || self.str_like(Dir::IFNDEF.0)
-                    || self.str_like("?MACRO")
+                    || self.str_like(Dir::MACRO.0)
                 {
                     if_level += 1;
                 } else if self.str_like(Dir::END.0) {
@@ -3118,6 +3162,7 @@ impl Dir {
     const EMULATE: Self = Self("?EMULATE");
     const NATIVE: Self = Self("?NATIVE");
     const RES: Self = Self("?RES");
+    const MACRO: Self = Self("?MACRO");
 }
 
 const DIRECTIVES: &[Dir] = &[
@@ -3140,6 +3185,7 @@ const DIRECTIVES: &[Dir] = &[
     Dir::EMULATE,
     Dir::NATIVE,
     Dir::RES,
+    Dir::MACRO,
 ];
 
 const GRAPHEMES: &[(&[u8; 2], Tok)] = &[
@@ -3233,9 +3279,13 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 self.stash = Some(Tok::EOF);
                 Ok(Tok::EOF)
             }
-            // macro argument
+            // macro argument or maybe a skipped newline
             Some(b'\\') => {
                 self.reader.eat();
+                if let Some(b'\n') = self.reader.peek()? {
+                    self.reader.eat();
+                    return self.peek(); // TODO shouldn't recurse
+                }
                 while let Some(c) = self.reader.peek()? {
                     if !c.is_ascii_digit() {
                         break;
@@ -3321,10 +3371,13 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.reader.eat();
                     self.string.push(c as char);
                 }
-                // the string might be grapheme
-                if self.string.len() == 2 {
-                    let s = self.string.as_bytes();
-                    let s = &[s[0].to_ascii_uppercase(), s[1].to_ascii_uppercase()];
+                // c wasn't an ident, so wasnt eaten
+                if self.string.len() == 0 {
+                    self.reader.eat();
+                }
+                // check for grapheme
+                if let Some(nc) = self.reader.peek()? {
+                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
                     if let Some(tok) = GRAPHEMES
                         .iter()
                         .find_map(|(bs, tok)| (*bs == s).then_some(tok))
@@ -3339,21 +3392,6 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 if self.string.len() > 1 {
                     self.stash = Some(Tok::IDENT);
                     return Ok(Tok::IDENT);
-                }
-                // the char wasn't an ident, so wasnt eaten
-                self.reader.eat();
-                // check for grapheme
-                if let Some(nc) = self.reader.peek()? {
-                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
-                    if let Some(tok) = GRAPHEMES
-                        .iter()
-                        .find_map(|(bs, tok)| (*bs == s).then_some(tok))
-                        .copied()
-                    {
-                        self.reader.eat();
-                        self.stash = Some(tok);
-                        return Ok(tok);
-                    }
                 }
                 // else return an uppercase of whatever this char is
                 self.stash = Some(Tok(c.to_ascii_uppercase()));

@@ -196,6 +196,13 @@ impl<'a> Section<'a> {
     }
 }
 
+pub struct SymFlags;
+
+impl SymFlags {
+    pub const NONE: u8 = 0;
+    pub const EQU: u8 = 1 << 0;
+}
+
 #[derive(Debug)]
 pub struct Sym<'a> {
     pub label: Label<'a>,
@@ -204,6 +211,7 @@ pub struct Sym<'a> {
     pub section: &'a str,
     pub file: &'a str,
     pub pos: Pos,
+    pub flags: u8,
 }
 
 impl<'a> Sym<'a> {
@@ -214,6 +222,7 @@ impl<'a> Sym<'a> {
         section: &'a str,
         file: &'a str,
         pos: Pos,
+        flags: u8,
     ) -> Self {
         Self {
             label,
@@ -222,6 +231,7 @@ impl<'a> Sym<'a> {
             section,
             file,
             pos,
+            flags,
         }
     }
 }
@@ -244,6 +254,19 @@ impl<'a> Display for Label<'a> {
             write!(f, "{scope}{}", self.string)
         } else {
             write!(f, "{}", self.string)
+        }
+    }
+}
+
+impl<'a, T: AsRef<str>> PartialEq<T> for Label<'a> {
+    fn eq(&self, other: &T) -> bool {
+        let other = other.as_ref();
+        if let Some(scope) = self.scope {
+            ((scope.len() + self.string.len()) == other.len())
+                && other.starts_with(scope)
+                && other.ends_with(self.string)
+        } else {
+            other == self.string
         }
     }
 }
@@ -271,6 +294,8 @@ impl Tok {
     pub const PIPE: Self = Self(b'|');
     pub const LPAREN: Self = Self(b'(');
     pub const RPAREN: Self = Self(b')');
+    pub const LBRACKET: Self = Self(b'[');
+    pub const RBRACKET: Self = Self(b']');
     pub const BANG: Self = Self(b'!');
     pub const TILDE: Self = Self(b'~');
     pub const HASH: Self = Self(b'#');

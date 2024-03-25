@@ -13,7 +13,8 @@ use std::{
 };
 
 use basm::{
-    Expr, ExprNode, Label, Op, Pos, Reloc, RelocVal, Section, SliceInterner, StrInterner, Sym, Tok,
+    Expr, ExprNode, Label, Op, Pos, Reloc, RelocVal, Section, SliceInterner, StrInterner, Sym,
+    SymFlags, Tok,
 };
 use clap::Parser;
 use indexmap::IndexMap;
@@ -35,7 +36,7 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Output file for SYM debug symbol file
+    /// Output file for `SYM` debug symbol file
     #[arg(short = 'g')]
     debug: Option<PathBuf>,
 
@@ -95,6 +96,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             def_file_section,
             def_file_section,
             Pos(0, 0),
+            SymFlags::NONE,
         ));
     }
 
@@ -174,9 +176,6 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // TODO as a quick hack we store all symbols for addresses for generating debug
-    //   info later...
-    let mut debug_addrs = HashMap::new();
     for pass in 1..=2 {
         tracing::trace!("symbol table pass {pass}");
         for i in 0..ld.syms.len() {
@@ -185,7 +184,6 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 Expr::Addr(section, pc) => {
                     let section = ld.sections.iter().find(|sec| sec.name == section).unwrap();
                     let value = pc + section.pc;
-                    debug_addrs.insert(ld.syms[i].label, value);
                     Expr::Const(value as i32)
                 }
                 Expr::List(expr) => {
@@ -327,16 +325,21 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .truncate(true)
             .open(path)
             .map_err(|e| format!("cant open file: {e}"))?;
-        for (label, value) in debug_addrs {
-            let sym = ld.syms.iter().find(|sym| sym.label == label).unwrap();
-            let tags = &config.sections[sym.section].tags.as_ref();
-            if let Some(tags) = tags {
-                if let Some(bank) = tags.get("bank") {
-                    writeln!(file, "{bank:02X}:{value:04X} {}", label.to_string())?;
-                    continue;
-                }
+        for sym in ld.syms {
+            // skip EQUs for now
+            if (sym.flags & SymFlags::EQU) != 0 {
+                continue;
             }
-            writeln!(file, "{value:04X} {}", label.to_string())?;
+            if let Expr::Const(value) = sym.value {
+                let tags = &config.sections[sym.section].tags.as_ref();
+                if let Some(tags) = tags {
+                    if let Some(bank) = tags.get("bank") {
+                        writeln!(file, "{bank:02X}:{value:04X} {}", sym.label.to_string())?;
+                        continue;
+                    }
+                }
+                writeln!(file, "{value:04X} {}", sym.label.to_string())?;
+            }
         }
     }
 
@@ -566,6 +569,7 @@ impl<'a> Ld<'a> {
             let line: usize = self.read_int(&mut reader)?;
             let column: usize = self.read_int(&mut reader)?;
             let pos = Pos(line, column);
+            let flags: u8 = self.read_int(&mut reader)?;
             // duplicate exported symbol?
             if let Some(other) = self
                 .syms
@@ -574,8 +578,15 @@ impl<'a> Ld<'a> {
             {
                 return Err(self.err_in(file, &format!("duplicate exported symbol \"{label}\" found\n\tdefined at {}:{}:{}\n\tagain at {sym_file}:{line}:{column}", other.file, other.pos.0, other.pos.1)));
             }
-            self.syms
-                .push(Sym::new(label, value, unit, sym_section, sym_file, pos));
+            self.syms.push(Sym::new(
+                label,
+                value,
+                unit,
+                sym_section,
+                sym_file,
+                pos,
+                flags,
+            ));
         }
         // add to sections
         let sections_len: usize = self.read_int(&mut reader)?;
