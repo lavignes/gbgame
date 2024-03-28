@@ -164,7 +164,9 @@ pub enum ExprNode<'a> {
 #[derive(Debug, Clone, Copy)]
 pub enum RelocVal<'a> {
     Addr(&'a str, u32),
+    HiAddr(&'a str, u32),
     List(&'a [ExprNode<'a>]),
+    HiList(&'a [ExprNode<'a>]),
 }
 
 #[derive(Debug, Clone, Copy)]

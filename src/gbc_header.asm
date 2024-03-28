@@ -3,7 +3,7 @@
 
 ?include "hardware.inc"
 
-    ; jump to entry point
+PostBoot:
     nop
     jp Start
 

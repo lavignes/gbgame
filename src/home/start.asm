@@ -1,7 +1,7 @@
 ; vim: ft=basm
-?include "hardware.inc"
-
 ?section "HOME"
+
+?include "hardware.inc"
 
 ?export Start
 Start:

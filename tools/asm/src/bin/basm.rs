@@ -258,8 +258,21 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     output.write_all(&section.len().to_le_bytes())?;
                     output.write_all(&pc.to_le_bytes())?;
                 }
-                RelocVal::List(expr) => {
+                RelocVal::HiAddr(section, pc) => {
                     output.write_all(&[1])?;
+                    let index = asm.str_int.offset(section).unwrap();
+                    output.write_all(&index.to_le_bytes())?;
+                    output.write_all(&section.len().to_le_bytes())?;
+                    output.write_all(&pc.to_le_bytes())?;
+                }
+                RelocVal::List(expr) => {
+                    output.write_all(&[2])?;
+                    let index = asm.expr_int.offset(expr).unwrap();
+                    output.write_all(&index.to_le_bytes())?;
+                    output.write_all(&expr.len().to_le_bytes())?;
+                }
+                RelocVal::HiList(expr) => {
+                    output.write_all(&[3])?;
                     let index = asm.expr_int.offset(expr).unwrap();
                     output.write_all(&index.to_le_bytes())?;
                     output.write_all(&expr.len().to_le_bytes())?;
@@ -430,10 +443,15 @@ impl<'a> Asm<'a> {
                     }
 
                     let string = self.str_intern();
-                    let label = if !self.str().starts_with(".") {
-                        Label::new(None, string)
+                    let label = if let Some(index) = string.find('.') {
+                        let (scope, string) = string.split_at(index);
+                        if scope.is_empty() {
+                            Label::new(self.scope, string)
+                        } else {
+                            Label::new(Some(scope), string)
+                        }
                     } else {
-                        Label::new(self.scope, string)
+                        Label::new(None, string)
                     };
                     self.eat();
 
@@ -833,10 +851,15 @@ impl<'a> Asm<'a> {
                             return Err(self.err("expected label"));
                         }
                         let string = self.str_intern();
-                        let label = if !string.starts_with(".") {
-                            Label::new(None, string)
+                        let label = if let Some(index) = string.find('.') {
+                            let (scope, string) = string.split_at(index);
+                            if scope.is_empty() {
+                                Label::new(self.scope, string)
+                            } else {
+                                Label::new(Some(scope), string)
+                            }
                         } else {
-                            Label::new(self.scope, string)
+                            Label::new(None, string)
                         };
                         self.eat();
                         self.expect(Tok::COMMA)?;
@@ -847,10 +870,15 @@ impl<'a> Asm<'a> {
                         self.expr_buffer.push(ExprNode::Tag(label, tag));
                     } else {
                         let string = self.str_intern();
-                        let label = if !string.starts_with(".") {
-                            Label::new(None, string)
+                        let label = if let Some(index) = string.find('.') {
+                            let (scope, string) = string.split_at(index);
+                            if scope.is_empty() {
+                                Label::new(self.scope, string)
+                            } else {
+                                Label::new(Some(scope), string)
+                            }
                         } else {
-                            Label::new(self.scope, string)
+                            Label::new(None, string)
                         };
                         self.expr_buffer.push(ExprNode::Label(label));
                     }
@@ -972,13 +1000,25 @@ impl<'a> Asm<'a> {
         Ok(())
     }
 
-    fn reloc(&mut self, offset: usize, width: u8, expr: Expr<'a>, pos: Pos) {
+    fn reloc_full(&mut self, offset: usize, width: u8, expr: Expr<'a>, hi: bool, pos: Pos) {
         let pc = self.pc() as usize;
         let offset = pc + offset;
         let value = match expr {
             Expr::Const(_) => unreachable!(),
-            Expr::Addr(section, pc) => RelocVal::Addr(section, pc),
-            Expr::List(expr) => RelocVal::List(expr),
+            Expr::Addr(section, pc) => {
+                if hi {
+                    RelocVal::HiAddr(section, pc)
+                } else {
+                    RelocVal::Addr(section, pc)
+                }
+            }
+            Expr::List(expr) => {
+                if hi {
+                    RelocVal::HiList(expr)
+                } else {
+                    RelocVal::List(expr)
+                }
+            }
         };
         let unit = self.str_int.intern("__STATIC__");
         let file = self.tok().file();
@@ -990,6 +1030,10 @@ impl<'a> Asm<'a> {
             file,
             pos,
         });
+    }
+
+    fn reloc(&mut self, offset: usize, width: u8, expr: Expr<'a>, pos: Pos) {
+        self.reloc_full(offset, width, expr, false, pos)
     }
 
     fn operand(&mut self, mne: Mne) -> io::Result<()> {
@@ -1433,10 +1477,14 @@ impl<'a> Asm<'a> {
                         if self.emit {
                             self.write(&[0xF0]);
                             if let Ok(value) = self.const_expr(expr) {
-                                self.write(&self.range_8(value)?.to_le_bytes());
+                                let value = self.range_16(value)?;
+                                if !(0xFF00..=0xFFFF).contains(&value) {
+                                    return Err(self.err("address not in hi memory"));
+                                }
+                                self.write(&(value as u8).to_le_bytes());
                             } else {
                                 self.write(&[0xFD]);
-                                self.reloc(1, 1, expr, pos);
+                                self.reloc_full(1, 1, expr, true, pos);
                             }
                         }
                         return self.add_pc(2);
@@ -1451,10 +1499,14 @@ impl<'a> Asm<'a> {
                         if self.emit {
                             self.write(&[0xE0]);
                             if let Ok(value) = self.const_expr(expr) {
-                                self.write(&self.range_8(value)?.to_le_bytes());
+                                let value = self.range_16(value)?;
+                                if !(0xFF00..=0xFFFF).contains(&value) {
+                                    return Err(self.err("address not in hi memory"));
+                                }
+                                self.write(&(value as u8).to_le_bytes());
                             } else {
                                 self.write(&[0xFD]);
-                                self.reloc(1, 1, expr, pos);
+                                self.reloc_full(1, 1, expr, true, pos);
                             }
                         }
                         return self.add_pc(2);

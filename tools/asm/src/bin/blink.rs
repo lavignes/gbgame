@@ -221,9 +221,45 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     let section = ld.sections.iter().find(|sec| sec.name == section).unwrap();
                     (pc + section.pc) as i32
                 }
+                RelocVal::HiAddr(section, pc) => {
+                    let section = ld.sections.iter().find(|sec| sec.name == section).unwrap();
+                    let value = (pc + section.pc) as i32;
+                    if !(0xFF00..=0xFFFF).contains(&value) {
+                        Err(ld.err_in(
+                            reloc.unit,
+                            &format!(
+                                "address not in hi memory\n\tdefined at {}:{}:{}",
+                                reloc.file, reloc.pos.0, reloc.pos.1
+                            ),
+                        ))?
+                    }
+                    value & 0xFF
+                }
                 RelocVal::List(expr) => {
                     if let Some(value) = ld.expr_eval(reloc.unit, expr, &config.sections) {
                         value
+                    } else {
+                        Err(ld.err_in(
+                            reloc.unit,
+                            &format!(
+                                "expression cannot be solved\n\tdefined at {}:{}:{}",
+                                reloc.file, reloc.pos.0, reloc.pos.1
+                            ),
+                        ))?
+                    }
+                }
+                RelocVal::HiList(expr) => {
+                    if let Some(value) = ld.expr_eval(reloc.unit, expr, &config.sections) {
+                        if !(0xFF00..=0xFFFF).contains(&value) {
+                            Err(ld.err_in(
+                                reloc.unit,
+                                &format!(
+                                    "address not in hi memory\n\tdefined at {}:{}:{}",
+                                    reloc.file, reloc.pos.0, reloc.pos.1
+                                ),
+                            ))?
+                        }
+                        value & 0xFF
                     } else {
                         Err(ld.err_in(
                             reloc.unit,
@@ -640,9 +676,35 @@ impl<'a> Ld<'a> {
                     1 => {
                         let index: usize = self.read_int(&mut reader)?;
                         let len: usize = self.read_int(&mut reader)?;
+                        let reloc_section = str_int.slice(index..(index + len)).unwrap();
+                        let pc: u32 = self.read_int(&mut reader)?;
+                        let reloc_section = self.str_int.intern(reloc_section);
+                        // place the address relative to the start of the section
+                        let pc = if let Some(reloc_section) =
+                            self.sections.iter().find(|sec| sec.name == reloc_section)
+                        {
+                            pc + reloc_section.pc
+                        } else {
+                            return Err(self.err_in(
+                                file,
+                                &format!("section \"{reloc_section}\" is not defined in config"),
+                            ));
+                        };
+                        RelocVal::HiAddr(reloc_section, pc)
+                    }
+                    2 => {
+                        let index: usize = self.read_int(&mut reader)?;
+                        let len: usize = self.read_int(&mut reader)?;
                         let expr = expr_int.slice(index..(index + len)).unwrap();
                         let expr = self.expr_int.intern(expr);
                         RelocVal::List(expr)
+                    }
+                    3 => {
+                        let index: usize = self.read_int(&mut reader)?;
+                        let len: usize = self.read_int(&mut reader)?;
+                        let expr = expr_int.slice(index..(index + len)).unwrap();
+                        let expr = self.expr_int.intern(expr);
+                        RelocVal::HiList(expr)
                     }
                     _ => return Err(self.err_in(file, "malformed relocation table")),
                 };
