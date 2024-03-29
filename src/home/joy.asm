@@ -6,8 +6,7 @@
 BIT_GET_ACTION = 5
 BIT_GET_DIRECTION = 4
 
-?export JoyUpdate
-JoyUpdate:
+JoyUpdate::
     ld a, (1 << BIT_GET_DIRECTION)
     ldh [HW_IO_P1], a
     ldh a, [HW_IO_P1]

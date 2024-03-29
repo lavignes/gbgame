@@ -3,8 +3,7 @@
 
 ?include "hardware.inc"
 
-?export Start
-Start:
+Start::
     jr Start
 
 StartDoubleSpeedMode:

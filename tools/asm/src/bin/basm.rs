@@ -455,11 +455,6 @@ impl<'a> Asm<'a> {
                     };
                     self.eat();
 
-                    // optional colon
-                    if self.peek()? == Tok::COLON {
-                        self.eat();
-                    }
-
                     let index = if let Some(item) = self
                         .syms
                         .iter()
@@ -489,23 +484,45 @@ impl<'a> Asm<'a> {
                         ));
                         index
                     };
-                    // check if this label is being defined to a value
-                    if self.peek()? == Tok::EQU {
-                        self.eat();
-                        let expr = self.expr()?;
-                        // equ's must always be const, either on the first or second pass
-                        if self.emit {
-                            self.syms[index].value = Expr::Const(self.const_expr(expr)?);
-                            self.syms[index].flags |= SymFlags::EQU;
-                        } else if let Expr::Const(expr) = expr {
-                            self.syms[index].value = Expr::Const(expr);
-                            self.syms[index].flags |= SymFlags::EQU;
-                        } else {
-                            // we couldn't evaluate this yet, so remove it
-                            self.syms.pop();
+
+                    match self.peek()? {
+                        // optional colon
+                        Tok::COLON => {
+                            self.eat();
                         }
-                        self.eol()?;
-                        continue;
+                        // export colons
+                        Tok::DCOLON => {
+                            self.eat();
+                            if self.emit {
+                                let unit = self.str_int.intern("__EXPORT__");
+                                if let Some(sym) =
+                                    self.syms.iter_mut().find(|sym| sym.label == label)
+                                {
+                                    if sym.unit == unit {
+                                        return Err(self.err("symbol is already exported"));
+                                    }
+                                    sym.unit = unit;
+                                }
+                            }
+                        }
+                        Tok::EQU => {
+                            self.eat();
+                            let expr = self.expr()?;
+                            // equ's must always be const, either on the first or second pass
+                            if self.emit {
+                                self.syms[index].value = Expr::Const(self.const_expr(expr)?);
+                                self.syms[index].flags |= SymFlags::EQU;
+                            } else if let Expr::Const(expr) = expr {
+                                self.syms[index].value = Expr::Const(expr);
+                                self.syms[index].flags |= SymFlags::EQU;
+                            } else {
+                                // we couldn't evaluate this yet, so remove it
+                                self.syms.pop();
+                            }
+                            self.eol()?;
+                            continue;
+                        }
+                        _ => {}
                     }
                     // set the scope
                     if !string.starts_with(".") {
@@ -2873,34 +2890,6 @@ impl<'a> Asm<'a> {
                 };
                 self.section = index;
             }
-            Dir::EXPORT => {
-                self.eat();
-                loop {
-                    if self.peek()? != Tok::IDENT {
-                        return Err(self.err("expected symbol name"));
-                    }
-                    let string = self.str_intern();
-                    if string.starts_with(".") {
-                        return Err(self.err("exports must be global"));
-                    }
-                    if self.emit {
-                        let unit = self.str_int.intern("__EXPORT__");
-                        if let Some(sym) = self.syms.iter_mut().find(|sym| sym.label == string) {
-                            if sym.unit == unit {
-                                return Err(self.err("symbol is already exported"));
-                            }
-                            sym.unit = unit;
-                        } else {
-                            return Err(self.err("cannot export undeclared symbol"));
-                        }
-                    }
-                    self.eat();
-                    if self.peek()? != Tok::COMMA {
-                        break;
-                    }
-                    self.eat();
-                }
-            }
             Dir::PAD => {
                 self.eat();
                 let expr = self.expr()?;
@@ -3199,7 +3188,6 @@ impl Dir {
     const DATA16: Self = Self("?DATA16");
     const DATA24: Self = Self("?DATA24");
     const SECTION: Self = Self("?SECTION");
-    const EXPORT: Self = Self("?EXPORT");
     const PAD: Self = Self("?PAD");
     const ALIGN: Self = Self("?ALIGN");
     const INCLUDE: Self = Self("?INCLUDE");
@@ -3222,7 +3210,6 @@ const DIRECTIVES: &[Dir] = &[
     Dir::DATA16,
     Dir::DATA24,
     Dir::SECTION,
-    Dir::EXPORT,
     Dir::PAD,
     Dir::ALIGN,
     Dir::INCLUDE,
@@ -3250,6 +3237,7 @@ const GRAPHEMES: &[(&[u8; 2], Tok)] = &[
     (b"!=", Tok::NEQ),
     (b"&&", Tok::AND),
     (b"||", Tok::OR),
+    (b"::", Tok::DCOLON),
     (b"AF", Tok::AF),
     (b"BC", Tok::BC),
     (b"DE", Tok::DE),

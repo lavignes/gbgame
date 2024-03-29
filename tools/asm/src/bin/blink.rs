@@ -37,8 +37,12 @@ struct Args {
     output: Option<PathBuf>,
 
     /// Output file for `SYM` debug symbol file
-    #[arg(short = 'g')]
+    #[arg(short = 'g', long)]
     debug: Option<PathBuf>,
+
+    /// Output file for VIM tags file
+    #[arg(long)]
+    tags: Option<PathBuf>,
 
     /// Pre-defined symbols (repeatable)
     #[arg(short = 'D', long, value_name="KEY1=val", value_parser = parse_defines::<String, i32>)]
@@ -361,7 +365,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .truncate(true)
             .open(path)
             .map_err(|e| format!("cant open file: {e}"))?;
-        for sym in ld.syms {
+        for sym in &ld.syms {
             // skip EQUs for now
             if (sym.flags & SymFlags::EQU) != 0 {
                 continue;
@@ -376,6 +380,20 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 }
                 writeln!(file, "{value:04X} {}", sym.label.to_string())?;
             }
+        }
+    }
+
+    if let Some(path) = args.tags {
+        tracing::trace!("writing tags file");
+        let mut file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .map_err(|e| format!("cant open file: {e}"))?;
+        ld.syms.sort_by_key(|sym| sym.label.to_string());
+        for sym in &ld.syms {
+            writeln!(file, "{}\t{}\t{}", sym.label, sym.file, sym.pos.0)?;
         }
     }
 

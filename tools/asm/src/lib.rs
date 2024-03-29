@@ -329,14 +329,15 @@ impl Tok {
     pub const NEQ: Self = Self(0x8B); // !=
     pub const AND: Self = Self(0x8C); // &&
     pub const OR: Self = Self(0x8D); // ||
+    pub const DCOLON: Self = Self(0x8E); // ::
 
-    pub const AF: Self = Self(0x8E); // AF
-    pub const BC: Self = Self(0x8F); // BC
-    pub const DE: Self = Self(0x90); // DE
-    pub const HL: Self = Self(0x91); // HL
-    pub const SP: Self = Self(0x92); // SP
-    pub const NC: Self = Self(0x93); // NC
-    pub const NZ: Self = Self(0x94); // NZ
+    pub const AF: Self = Self(0x8F); // AF
+    pub const BC: Self = Self(0x90); // BC
+    pub const DE: Self = Self(0x91); // DE
+    pub const HL: Self = Self(0x92); // HL
+    pub const SP: Self = Self(0x93); // SP
+    pub const NC: Self = Self(0x94); // NC
+    pub const NZ: Self = Self(0x95); // NZ
 }
 
 #[derive(Debug, Clone, Copy)]

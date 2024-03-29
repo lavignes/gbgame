@@ -1,4 +1,5 @@
 /game.gbc
 /game.sym
 /game.sav
+/game.tags
 /src/**/*.o
