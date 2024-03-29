@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     error::Error,
     fs::{self, File},
     io::{self, ErrorKind, Read, Seek, Write},
@@ -32,6 +33,10 @@ struct Args {
     /// Search directories for included files
     #[arg(short = 'I', long)]
     include: Vec<PathBuf>,
+
+    /// Output file for makefile dependency rules
+    #[arg(short = 'M')]
+    make_depend: Option<PathBuf>,
 
     /// One of `TRACE`, `DEBUG`, `INFO`, `WARN`, or `ERROR`
     #[arg(short, long, default_value_t = Level::INFO)]
@@ -67,7 +72,7 @@ fn main() -> ExitCode {
 }
 
 fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
-    let input = fs::canonicalize(args.source)?;
+    let input = fs::canonicalize(args.source.clone())?;
     let input = input.to_str().unwrap();
     let file = File::open(input).map_err(|e| format!("cant open file: {e}"))?;
     let lexer = Lexer::new(file, input);
@@ -289,6 +294,18 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if let Some(path) = args.make_depend {
+        let mut file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .map_err(|e| format!("cant open file: {e}"))?;
+        for include in asm.included {
+            writeln!(file, "{}: {}", args.source.display(), include.display())?;
+        }
+    }
+
     tracing::debug!("symbols: {}", asm.syms.len());
     tracing::debug!(
         "string heap: {}/{} bytes",
@@ -334,6 +351,7 @@ struct Asm<'a> {
     emit: bool,
     if_level: usize,
     includes: Vec<PathBuf>,
+    included: HashSet<PathBuf>,
 
     macros: Vec<Macro<'a>>,
 
@@ -360,6 +378,7 @@ impl<'a> Asm<'a> {
             emit: false,
             if_level: 0,
             includes,
+            included: HashSet::new(),
 
             macros: Vec::new(),
 
@@ -2940,6 +2959,7 @@ impl<'a> Asm<'a> {
                         return Err(self.err("file not found"));
                     }
                 };
+                self.included.insert(name.clone());
                 let name = self.str_int.intern(name.to_str().unwrap());
                 let file = File::open(name)?;
                 self.eat();
@@ -3228,7 +3248,7 @@ const DIRECTIVES: &[Dir] = &[
     Dir::MACRO,
 ];
 
-const GRAPHEMES: &[(&[u8; 2], Tok)] = &[
+const DIGRAPHS: &[(&[u8; 2], Tok)] = &[
     (b"<<", Tok::ASL),
     (b">>", Tok::ASR),
     (b"~>", Tok::LSR),
@@ -3421,10 +3441,10 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 if self.string.len() == 0 {
                     self.reader.eat();
                 }
-                // check for grapheme
+                // check for digraphs
                 if let Some(nc) = self.reader.peek()? {
                     let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
-                    if let Some(tok) = GRAPHEMES
+                    if let Some(tok) = DIGRAPHS
                         .iter()
                         .find_map(|(bs, tok)| (*bs == s).then_some(tok))
                         .copied()

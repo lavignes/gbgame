@@ -2,4 +2,6 @@
 /game.sym
 /game.sav
 /game.tags
+
 /src/**/*.o
+/src/**/*.d
