@@ -1,5 +1,6 @@
 ; vim: ft=basm
 ?ifndef JOY_INC
+JOY_INC = 1
 
 JOY_BIT_A = 0
 JOY_BIT_B = 1

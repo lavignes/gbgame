@@ -3066,6 +3066,7 @@ impl<'a> Asm<'a> {
                 Tok::STR => toks.push(MacroTok::Str(self.str_intern())),
                 Tok::NUM => toks.push(MacroTok::Num(self.tok().num())),
                 Tok::ARG => toks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
+                Tok::NARG => toks.push(MacroTok::Narg),
                 tok => toks.push(MacroTok::Tok(tok)),
             }
             self.eat();
@@ -3326,6 +3327,11 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.reader.eat();
                     return self.peek(); // TODO shouldn't recurse
                 }
+                if let Some(b'#') = self.reader.peek()? {
+                    self.reader.eat();
+                    self.stash = Some(Tok::NARG);
+                    return Ok(Tok::NARG);
+                }
                 while let Some(c) = self.reader.peek()? {
                     if !c.is_ascii_digit() {
                         break;
@@ -3476,6 +3482,7 @@ enum MacroTok<'a> {
     Ident(&'a str),
     Num(i32),
     Arg(usize),
+    Narg,
 }
 
 #[derive(Clone, Copy)]
@@ -3521,6 +3528,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                     _ => unreachable!(),
                 }
             }
+            MacroTok::Narg => Ok(Tok::NUM),
         }
     }
 
@@ -3553,6 +3561,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 MacroTok::Num(val) => val,
                 _ => unreachable!(),
             },
+            MacroTok::Narg => self.args.len() as i32,
             _ => unreachable!(),
         }
     }

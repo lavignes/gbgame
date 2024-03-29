@@ -6,6 +6,7 @@
 BIT_GET_ACTION = 5
 BIT_GET_DIRECTION = 4
 
+; modifies a, bc
 JoyUpdate::
     ld a, (1 << BIT_GET_DIRECTION)
     ldh [HW_IO_P1], a
@@ -38,7 +39,23 @@ JoyUpdate::
     ldh [HW_IO_P1], a
 
     ; now we have the button states for this frame in b
-    ; & with JoyPressed to get the held buttons
+    ; AND with JoyPressed to get the held buttons
     ldh a, [HRAM.JoyPressed]
+    and a, b
+    ldh [HRAM.JoyHeld], a
+
+    ; AND with cpl to get released buttons this frame
+    ld a, b
+    cpl
+    ld c, a
+    ldh a, [HRAM.JoyPressed]
+    and a, c
+    ldh [HRAM.JoyReleased], a
+
+    ; finally update the buttons for the current frame
+    ; XOR with the current pressed so filter out held
+    ldh a, [HRAM.JoyPressed]
+    xor a, b
+    ldh [HRAM.JoyPressed], a
 
     ret

@@ -319,25 +319,26 @@ impl Tok {
     pub const NUM: Self = Self(0x82);
     pub const STR: Self = Self(0x83);
     pub const ARG: Self = Self(0x84);
+    pub const NARG: Self = Self(0x85);
 
-    pub const ASL: Self = Self(0x85); // <<
-    pub const ASR: Self = Self(0x86); // >>
-    pub const LSR: Self = Self(0x87); // ~>
-    pub const LTE: Self = Self(0x88); // <=
-    pub const GTE: Self = Self(0x89); // >=
-    pub const EQ: Self = Self(0x8A); // ==
-    pub const NEQ: Self = Self(0x8B); // !=
-    pub const AND: Self = Self(0x8C); // &&
-    pub const OR: Self = Self(0x8D); // ||
-    pub const DCOLON: Self = Self(0x8E); // ::
+    pub const ASL: Self = Self(0x90); // <<
+    pub const ASR: Self = Self(0x91); // >>
+    pub const LSR: Self = Self(0x92); // ~>
+    pub const LTE: Self = Self(0x93); // <=
+    pub const GTE: Self = Self(0x94); // >=
+    pub const EQ: Self = Self(0x95); // ==
+    pub const NEQ: Self = Self(0x96); // !=
+    pub const AND: Self = Self(0x97); // &&
+    pub const OR: Self = Self(0x98); // ||
+    pub const DCOLON: Self = Self(0x99); // ::
 
-    pub const AF: Self = Self(0x8F); // AF
-    pub const BC: Self = Self(0x90); // BC
-    pub const DE: Self = Self(0x91); // DE
-    pub const HL: Self = Self(0x92); // HL
-    pub const SP: Self = Self(0x93); // SP
-    pub const NC: Self = Self(0x94); // NC
-    pub const NZ: Self = Self(0x95); // NZ
+    pub const AF: Self = Self(0xA0); // AF
+    pub const BC: Self = Self(0xA1); // BC
+    pub const DE: Self = Self(0xA2); // DE
+    pub const HL: Self = Self(0xA3); // HL
+    pub const SP: Self = Self(0xA4); // SP
+    pub const NC: Self = Self(0xA5); // NC
+    pub const NZ: Self = Self(0xA6); // NZ
 }
 
 #[derive(Debug, Clone, Copy)]
