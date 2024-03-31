@@ -1,12 +1,10 @@
 ; vim: ft=basm
 ?section "HRAM"
 
-HRAM:
+hROMBankLo::    ?res 1
 
-.ROMBankLo::    ?res 1
+hJoyPressed::   ?res 1
+hJoyHeld::      ?res 1
+hJoyReleased::  ?res 1
 
-.JoyPressed::   ?res 1
-.JoyHeld::      ?res 1
-.JoyReleased::  ?res 1
-
-.Scratch::      ?res 4
+hScratch::      ?res 4

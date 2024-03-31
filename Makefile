@@ -12,7 +12,7 @@ LOG_LEVEL := ERROR
 ASM_FLAGS := -l $(LOG_LEVEL) -I include
 LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym --tags game.tags
 
-all: toolchain depend game.gbc
+all: depend game.gbc
 
 toolchain: $(ASM) $(LD)
 
@@ -22,11 +22,11 @@ $(ASM) $(LD):
 game.gbc: $(OBJS)
 	$(LD) $(LD_FLAGS) -o $@ $^
 
-%.o: %.asm
+%.o: %.asm $(ASM)
 	$(ASM) $(ASM_FLAGS) -o $@ $<
 
-%.d: %.asm
-	$(ASM) $(ASM_FLAGS) -o /dev/null -M $@ $<
+%.d: %.asm $(ASM)
+	$(ASM) $(ASM_FLAGS) -M -o $@ $<
 
 depend: $(DEPS)
 

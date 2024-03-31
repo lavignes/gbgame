@@ -34,9 +34,9 @@ struct Args {
     #[arg(short = 'I', long)]
     include: Vec<PathBuf>,
 
-    /// Output file for makefile dependency rules
+    /// Output makefile dependencies lines instead of object file
     #[arg(short = 'M')]
-    make_depend: Option<PathBuf>,
+    make_depend: bool,
 
     /// One of `TRACE`, `DEBUG`, `INFO`, `WARN`, or `ERROR`
     #[arg(short, long, default_value_t = Level::INFO)]
@@ -114,195 +114,192 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     };
 
     tracing::trace!("writing");
-    output.write_all("pasm01".as_bytes())?;
-    let len = asm
-        .str_int
-        .storages
-        .iter()
-        .fold(0, |accum, storage| accum + storage.len());
-    output.write_all(&len.to_le_bytes())?;
-    for storage in &asm.str_int.storages {
-        output.write_all(storage.as_bytes())?;
-    }
-    let len = asm
-        .expr_int
-        .storages
-        .iter()
-        .fold(0, |accum, storage| accum + storage.len());
-    output.write_all(&len.to_le_bytes())?;
-    for storage in &asm.expr_int.storages {
-        for expr in storage {
-            match expr {
-                ExprNode::Const(value) => {
+
+    if !args.make_depend {
+        output.write_all("pasm01".as_bytes())?;
+        let len = asm
+            .str_int
+            .storages
+            .iter()
+            .fold(0, |accum, storage| accum + storage.len());
+        output.write_all(&len.to_le_bytes())?;
+        for storage in &asm.str_int.storages {
+            output.write_all(storage.as_bytes())?;
+        }
+        let len = asm
+            .expr_int
+            .storages
+            .iter()
+            .fold(0, |accum, storage| accum + storage.len());
+        output.write_all(&len.to_le_bytes())?;
+        for storage in &asm.expr_int.storages {
+            for expr in storage {
+                match expr {
+                    ExprNode::Const(value) => {
+                        output.write_all(&[0])?;
+                        output.write_all(&value.to_le_bytes())?;
+                    }
+                    ExprNode::Op(op) => {
+                        output.write_all(&[1])?;
+                        match op {
+                            Op::Binary(op) => {
+                                output.write_all(&[0])?;
+                                output.write_all(&[op.0])?;
+                            }
+                            Op::Unary(op) => {
+                                output.write_all(&[1])?;
+                                output.write_all(&[op.0])?;
+                            }
+                        }
+                    }
+                    ExprNode::Label(label) => {
+                        output.write_all(&[2])?;
+                        if let Some(scope) = label.scope {
+                            output.write_all(&[0])?;
+                            let index = asm.str_int.offset(scope).unwrap();
+                            output.write_all(&index.to_le_bytes())?;
+                            output.write_all(&scope.len().to_le_bytes())?;
+                        } else {
+                            output.write_all(&[1])?;
+                        }
+                        let index = asm.str_int.offset(label.string).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&label.string.len().to_le_bytes())?;
+                    }
+                    ExprNode::Tag(label, tag) => {
+                        output.write_all(&[3])?;
+                        if let Some(scope) = label.scope {
+                            output.write_all(&[0])?;
+                            let index = asm.str_int.offset(scope).unwrap();
+                            output.write_all(&index.to_le_bytes())?;
+                            output.write_all(&scope.len().to_le_bytes())?;
+                        } else {
+                            output.write_all(&[1])?;
+                        }
+                        let index = asm.str_int.offset(label.string).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&label.string.len().to_le_bytes())?;
+                        let index = asm.str_int.offset(tag).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&tag.len().to_le_bytes())?;
+                    }
+                }
+            }
+        }
+        output.write_all(&asm.syms.len().to_le_bytes())?;
+        for sym in &asm.syms {
+            if let Some(scope) = sym.label.scope {
+                output.write_all(&[0])?;
+                let index = asm.str_int.offset(scope).unwrap();
+                output.write_all(&index.to_le_bytes())?;
+                output.write_all(&scope.len().to_le_bytes())?;
+            } else {
+                output.write_all(&[1])?;
+            }
+            let index = asm.str_int.offset(sym.label.string).unwrap();
+            output.write_all(&index.to_le_bytes())?;
+            output.write_all(&sym.label.string.len().to_le_bytes())?;
+            match sym.value {
+                Expr::Const(value) => {
                     output.write_all(&[0])?;
                     output.write_all(&value.to_le_bytes())?;
                 }
-                ExprNode::Op(op) => {
-                    output.write_all(&[1])?;
-                    match op {
-                        Op::Binary(op) => {
-                            output.write_all(&[0])?;
-                            output.write_all(&[op.0])?;
-                        }
-                        Op::Unary(op) => {
-                            output.write_all(&[1])?;
-                            output.write_all(&[op.0])?;
-                        }
-                    }
-                }
-                ExprNode::Label(label) => {
-                    output.write_all(&[2])?;
-                    if let Some(scope) = label.scope {
-                        output.write_all(&[0])?;
-                        let index = asm.str_int.offset(scope).unwrap();
-                        output.write_all(&index.to_le_bytes())?;
-                        output.write_all(&scope.len().to_le_bytes())?;
-                    } else {
-                        output.write_all(&[1])?;
-                    }
-                    let index = asm.str_int.offset(label.string).unwrap();
-                    output.write_all(&index.to_le_bytes())?;
-                    output.write_all(&label.string.len().to_le_bytes())?;
-                }
-                ExprNode::Tag(label, tag) => {
-                    output.write_all(&[3])?;
-                    if let Some(scope) = label.scope {
-                        output.write_all(&[0])?;
-                        let index = asm.str_int.offset(scope).unwrap();
-                        output.write_all(&index.to_le_bytes())?;
-                        output.write_all(&scope.len().to_le_bytes())?;
-                    } else {
-                        output.write_all(&[1])?;
-                    }
-                    let index = asm.str_int.offset(label.string).unwrap();
-                    output.write_all(&index.to_le_bytes())?;
-                    output.write_all(&label.string.len().to_le_bytes())?;
-                    let index = asm.str_int.offset(tag).unwrap();
-                    output.write_all(&index.to_le_bytes())?;
-                    output.write_all(&tag.len().to_le_bytes())?;
-                }
-            }
-        }
-    }
-    output.write_all(&asm.syms.len().to_le_bytes())?;
-    for sym in &asm.syms {
-        if let Some(scope) = sym.label.scope {
-            output.write_all(&[0])?;
-            let index = asm.str_int.offset(scope).unwrap();
-            output.write_all(&index.to_le_bytes())?;
-            output.write_all(&scope.len().to_le_bytes())?;
-        } else {
-            output.write_all(&[1])?;
-        }
-        let index = asm.str_int.offset(sym.label.string).unwrap();
-        output.write_all(&index.to_le_bytes())?;
-        output.write_all(&sym.label.string.len().to_le_bytes())?;
-        match sym.value {
-            Expr::Const(value) => {
-                output.write_all(&[0])?;
-                output.write_all(&value.to_le_bytes())?;
-            }
-            Expr::Addr(section, pc) => {
-                output.write_all(&[1])?;
-                let index = asm.str_int.offset(section).unwrap();
-                output.write_all(&index.to_le_bytes())?;
-                output.write_all(&section.len().to_le_bytes())?;
-                output.write_all(&pc.to_le_bytes())?;
-            }
-            Expr::List(expr) => {
-                output.write_all(&[2])?;
-                let index = asm.expr_int.offset(expr).unwrap();
-                output.write_all(&index.to_le_bytes())?;
-                output.write_all(&expr.len().to_le_bytes())?;
-            }
-        }
-        let index = asm.str_int.offset(sym.unit).unwrap();
-        output.write_all(&index.to_le_bytes())?;
-        output.write_all(&sym.unit.len().to_le_bytes())?;
-        let index = asm.str_int.offset(sym.section).unwrap();
-        output.write_all(&index.to_le_bytes())?;
-        output.write_all(&sym.section.len().to_le_bytes())?;
-        let index = asm.str_int.offset(sym.file).unwrap();
-        output.write_all(&index.to_le_bytes())?;
-        output.write_all(&sym.file.len().to_le_bytes())?;
-        output.write_all(&sym.pos.0.to_le_bytes())?;
-        output.write_all(&sym.pos.1.to_le_bytes())?;
-        output.write_all(&sym.flags.to_le_bytes())?;
-    }
-    // filter out empty sections
-    let count = &asm
-        .sections
-        .iter()
-        .filter(|section| !section.data.is_empty())
-        .count();
-    tracing::trace!("writing {count} sections");
-    output.write_all(&count.to_le_bytes())?;
-    for section in asm.sections {
-        if section.data.is_empty() {
-            continue;
-        }
-        tracing::trace!(
-            "writing {} bytes of section \"{}\"",
-            section.data.len(),
-            section.name,
-        );
-        let index = asm.str_int.offset(section.name).unwrap();
-        output.write_all(&index.to_le_bytes())?;
-        output.write_all(&section.name.len().to_le_bytes())?;
-        output.write_all(&section.data.len().to_le_bytes())?;
-        output.write_all(&section.data)?;
-        output.write_all(&section.relocs.len().to_le_bytes())?;
-        for reloc in section.relocs {
-            output.write_all(&reloc.offset.to_le_bytes())?;
-            output.write_all(&reloc.width.to_le_bytes())?;
-            match reloc.value {
-                RelocVal::Addr(section, pc) => {
-                    output.write_all(&[0])?;
-                    let index = asm.str_int.offset(section).unwrap();
-                    output.write_all(&index.to_le_bytes())?;
-                    output.write_all(&section.len().to_le_bytes())?;
-                    output.write_all(&pc.to_le_bytes())?;
-                }
-                RelocVal::HiAddr(section, pc) => {
+                Expr::Addr(section, pc) => {
                     output.write_all(&[1])?;
                     let index = asm.str_int.offset(section).unwrap();
                     output.write_all(&index.to_le_bytes())?;
                     output.write_all(&section.len().to_le_bytes())?;
                     output.write_all(&pc.to_le_bytes())?;
                 }
-                RelocVal::List(expr) => {
+                Expr::List(expr) => {
                     output.write_all(&[2])?;
                     let index = asm.expr_int.offset(expr).unwrap();
                     output.write_all(&index.to_le_bytes())?;
                     output.write_all(&expr.len().to_le_bytes())?;
                 }
-                RelocVal::HiList(expr) => {
-                    output.write_all(&[3])?;
-                    let index = asm.expr_int.offset(expr).unwrap();
-                    output.write_all(&index.to_le_bytes())?;
-                    output.write_all(&expr.len().to_le_bytes())?;
-                }
             }
-            let index = asm.str_int.offset(reloc.unit).unwrap();
+            let index = asm.str_int.offset(sym.unit).unwrap();
             output.write_all(&index.to_le_bytes())?;
-            output.write_all(&reloc.unit.len().to_le_bytes())?;
-            let index = asm.str_int.offset(reloc.file).unwrap();
+            output.write_all(&sym.unit.len().to_le_bytes())?;
+            let index = asm.str_int.offset(sym.section).unwrap();
             output.write_all(&index.to_le_bytes())?;
-            output.write_all(&reloc.file.len().to_le_bytes())?;
-            output.write_all(&reloc.pos.0.to_le_bytes())?;
-            output.write_all(&reloc.pos.1.to_le_bytes())?;
+            output.write_all(&sym.section.len().to_le_bytes())?;
+            let index = asm.str_int.offset(sym.file).unwrap();
+            output.write_all(&index.to_le_bytes())?;
+            output.write_all(&sym.file.len().to_le_bytes())?;
+            output.write_all(&sym.pos.0.to_le_bytes())?;
+            output.write_all(&sym.pos.1.to_le_bytes())?;
+            output.write_all(&sym.flags.to_le_bytes())?;
+        }
+        // filter out empty sections
+        let count = &asm
+            .sections
+            .iter()
+            .filter(|section| !section.data.is_empty())
+            .count();
+        tracing::trace!("writing {count} sections");
+        output.write_all(&count.to_le_bytes())?;
+        for section in asm.sections {
+            if section.data.is_empty() {
+                continue;
+            }
+            tracing::trace!(
+                "writing {} bytes of section \"{}\"",
+                section.data.len(),
+                section.name,
+            );
+            let index = asm.str_int.offset(section.name).unwrap();
+            output.write_all(&index.to_le_bytes())?;
+            output.write_all(&section.name.len().to_le_bytes())?;
+            output.write_all(&section.data.len().to_le_bytes())?;
+            output.write_all(&section.data)?;
+            output.write_all(&section.relocs.len().to_le_bytes())?;
+            for reloc in section.relocs {
+                output.write_all(&reloc.offset.to_le_bytes())?;
+                output.write_all(&reloc.width.to_le_bytes())?;
+                match reloc.value {
+                    RelocVal::Addr(section, pc) => {
+                        output.write_all(&[0])?;
+                        let index = asm.str_int.offset(section).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&section.len().to_le_bytes())?;
+                        output.write_all(&pc.to_le_bytes())?;
+                    }
+                    RelocVal::HiAddr(section, pc) => {
+                        output.write_all(&[1])?;
+                        let index = asm.str_int.offset(section).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&section.len().to_le_bytes())?;
+                        output.write_all(&pc.to_le_bytes())?;
+                    }
+                    RelocVal::List(expr) => {
+                        output.write_all(&[2])?;
+                        let index = asm.expr_int.offset(expr).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&expr.len().to_le_bytes())?;
+                    }
+                    RelocVal::HiList(expr) => {
+                        output.write_all(&[3])?;
+                        let index = asm.expr_int.offset(expr).unwrap();
+                        output.write_all(&index.to_le_bytes())?;
+                        output.write_all(&expr.len().to_le_bytes())?;
+                    }
+                }
+                let index = asm.str_int.offset(reloc.unit).unwrap();
+                output.write_all(&index.to_le_bytes())?;
+                output.write_all(&reloc.unit.len().to_le_bytes())?;
+                let index = asm.str_int.offset(reloc.file).unwrap();
+                output.write_all(&index.to_le_bytes())?;
+                output.write_all(&reloc.file.len().to_le_bytes())?;
+                output.write_all(&reloc.pos.0.to_le_bytes())?;
+                output.write_all(&reloc.pos.1.to_le_bytes())?;
+            }
         }
     }
 
-    if let Some(path) = args.make_depend {
-        let mut file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .map_err(|e| format!("cant open file: {e}"))?;
+    if args.make_depend {
         for include in asm.included {
-            writeln!(file, "{}: {}", args.source.display(), include.display())?;
+            writeln!(output, "{}: {}", args.source.display(), include.display())?;
         }
     }
 

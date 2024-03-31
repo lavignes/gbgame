@@ -392,6 +392,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .open(path)
             .map_err(|e| format!("cant open file: {e}"))?;
         ld.syms.sort_by_key(|sym| sym.label.to_string());
+        ld.syms.dedup_by_key(|sym| sym.label.to_string());
         for sym in &ld.syms {
             writeln!(file, "{}\t{}\t{}", sym.label, sym.file, sym.pos.0)?;
         }
