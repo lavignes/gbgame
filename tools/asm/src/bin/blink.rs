@@ -90,7 +90,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     let mut ld = Ld::new();
 
     let def_file_section = ld.str_int.intern("__DEFINES__");
-    let def_unit = ld.str_int.intern("__STATIC__");
+    let def_unit = ld.str_int.intern("__EXPORT__");
     for (name, val) in &args.define {
         let string = ld.str_int.intern(name);
         ld.syms.push(Sym::new(
@@ -100,7 +100,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             def_file_section,
             def_file_section,
             Pos(0, 0),
-            SymFlags::NONE,
+            SymFlags::EQU,
         ));
     }
 
@@ -154,6 +154,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         let Ld {
             ref mut sections,
             ref mut memories,
+            ref mut syms,
             ..
         } = ld;
         let memory = memories
@@ -161,6 +162,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .find(|memory| memory.name == section.load)
             .unwrap();
         // TODO section alignment?
+        let define = section.define;
         let section = sections
             .iter_mut()
             .find(|section| section.name == name)
@@ -177,6 +179,31 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                     memory.name
                 ),
             ))?;
+        }
+        // define start and end in symbol table if wanted
+        if define {
+            let def_file_section = ld.str_int.intern("__DEFINES__");
+            let def_unit = ld.str_int.intern("__EXPORT__");
+            let start = ld.str_int.intern(&format!("__{name}_START__"));
+            syms.push(Sym::new(
+                Label::new(None, start),
+                Expr::Const(section.pc as i32),
+                def_unit,
+                def_file_section,
+                def_file_section,
+                Pos(0, 0),
+                SymFlags::EQU,
+            ));
+            let end = ld.str_int.intern(&format!("__{name}_END__"));
+            syms.push(Sym::new(
+                Label::new(None, end),
+                Expr::Const(memory.pc as i32),
+                def_unit,
+                def_file_section,
+                def_file_section,
+                Pos(0, 0),
+                SymFlags::EQU,
+            ));
         }
     }
 
@@ -394,6 +421,9 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
         ld.syms.sort_by_key(|sym| sym.label.to_string());
         ld.syms.dedup_by_key(|sym| sym.label.to_string());
         for sym in &ld.syms {
+            if sym.file == "__DEFINES__" {
+                continue;
+            }
             writeln!(file, "{}\t{}\t{}", sym.label, sym.file, sym.pos.0)?;
         }
     }
@@ -909,6 +939,9 @@ struct ConfigSection {
 
     #[serde(default, deserialize_with = "deserialize_tags")]
     tags: Option<HashMap<String, i32>>,
+
+    #[serde(default)]
+    define: bool,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -3,12 +3,9 @@
 
 ?include "hardware.inc"
 
-BIT_GET_ACTION = 5
-BIT_GET_DIRECTION = 4
-
 ; modifies a, bc
 JoyUpdate::
-    ld a, (1 << BIT_GET_DIRECTION)
+    ld a, (1 << HW_IO_P1_BIT_GET_DIRECTION)
     ldh [HW_IO_P1], a
     ldh a, [HW_IO_P1]
     ldh a, [HW_IO_P1]
@@ -19,7 +16,7 @@ JoyUpdate::
     swap a
     ld b, a
 
-    ld a, (1 << BIT_GET_ACTION)
+    ld a, (1 << HW_IO_P1_BIT_GET_ACTION)
     ldh [HW_IO_P1], a
     ldh a, [HW_IO_P1]
     ldh a, [HW_IO_P1]
@@ -35,7 +32,7 @@ JoyUpdate::
     ld b, a
 
     ; reset joypad
-    ld a, (1 << BIT_GET_DIRECTION) | (1 << BIT_GET_ACTION)
+    ld a, (1 << HW_IO_P1_BIT_GET_DIRECTION) | (1 << HW_IO_P1_BIT_GET_ACTION)
     ldh [HW_IO_P1], a
 
     ; now we have the button states for this frame in b

@@ -27,11 +27,13 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?data8  $01     ; international
 ?end
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; IO Ports
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IO Ports
 
 HW_IO_P1 =      $FF00
+HW_IO_P1_BIT_GET_ACTION = 4
+HW_IO_P1_BIT_GET_DIRECTION = 5
+
 HW_IO_SB =      $FF01
 HW_IO_SC =      $FF02
 HW_IO_DIV =     $FF03

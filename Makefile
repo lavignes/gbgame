@@ -40,4 +40,4 @@ clean:
 	rm -f game.sym
 	rm -f game.tags
 
--include $(DEPS)
+include $(DEPS)

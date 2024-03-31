@@ -90,7 +90,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             def_file_section,
             def_file_section,
             Pos(0, 0),
-            SymFlags::NONE,
+            SymFlags::EQU,
         ));
     }
 
@@ -1344,9 +1344,8 @@ impl<'a> Asm<'a> {
                         }
                     }
 
-                    _ => {
+                    Tok::LBRACKET => {
                         self.eat();
-                        self.expect(Tok::COMMA)?;
                         match self.peek()? {
                             tok @ (Tok::BC | Tok::DE | Tok::C) => {
                                 self.eat();
@@ -1438,6 +1437,31 @@ impl<'a> Asm<'a> {
                             }
                         }
                     }
+
+                    tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::SP) => {
+                        self.eat();
+                        self.expect(Tok::COMMA)?;
+                        let pos = self.tok().pos();
+                        let expr = self.expr()?;
+                        if self.emit {
+                            self.write(&[match tok {
+                                Tok::BC => 0x01,
+                                Tok::DE => 0x11,
+                                Tok::HL => 0x21,
+                                Tok::SP => 0x31,
+                                _ => unreachable!(),
+                            }]);
+                            if let Ok(value) = self.const_expr(expr) {
+                                self.write(&self.range_16(value)?.to_le_bytes());
+                            } else {
+                                self.write(&[0xFD, 0xFD]);
+                                self.reloc(1, 2, expr, pos);
+                            }
+                        }
+                        return self.add_pc(3);
+                    }
+
+                    _ => return Err(self.err("unexpected garbage")),
                 }
             }
 
@@ -2469,7 +2493,6 @@ impl<'a> Asm<'a> {
 
             Mne::BIT => {
                 self.eat();
-                let pos = self.tok().pos();
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 if expr > 7 {
@@ -2486,6 +2509,7 @@ impl<'a> Asm<'a> {
                     7 => 0x78,
                     _ => unreachable!(),
                 };
+                self.expect(Tok::COMMA)?;
                 match self.peek()? {
                     tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
                         self.eat();
@@ -2520,7 +2544,6 @@ impl<'a> Asm<'a> {
 
             Mne::SET => {
                 self.eat();
-                let pos = self.tok().pos();
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 if expr > 7 {
@@ -2537,6 +2560,7 @@ impl<'a> Asm<'a> {
                     7 => 0xF8,
                     _ => unreachable!(),
                 };
+                self.expect(Tok::COMMA)?;
                 match self.peek()? {
                     tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
                         self.eat();
@@ -2571,7 +2595,6 @@ impl<'a> Asm<'a> {
 
             Mne::RES => {
                 self.eat();
-                let pos = self.tok().pos();
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 if expr > 7 {
@@ -2588,6 +2611,7 @@ impl<'a> Asm<'a> {
                     7 => 0xB8,
                     _ => unreachable!(),
                 };
+                self.expect(Tok::COMMA)?;
                 match self.peek()? {
                     tok @ (Tok::A | Tok::B | Tok::C | Tok::D | Tok::E | Tok::H | Tok::L) => {
                         self.eat();
@@ -2675,7 +2699,6 @@ impl<'a> Asm<'a> {
                     tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
                         self.eat();
                         self.expect(Tok::COMMA)?;
-                        let pos = self.tok().pos();
                         let expr = self.expr()?;
                         if self.emit {
                             let branch = self
@@ -2696,7 +2719,6 @@ impl<'a> Asm<'a> {
                         return self.add_pc(2);
                     }
                     _ => {
-                        let pos = self.tok().pos();
                         let expr = self.expr()?;
                         if self.emit {
                             let branch = self
@@ -2757,7 +2779,6 @@ impl<'a> Asm<'a> {
 
             Mne::RST => {
                 self.eat();
-                let pos = self.tok().pos();
                 let expr = self.expr()?;
                 if self.emit {
                     let expr = self.const_expr(expr)?;
@@ -2781,7 +2802,6 @@ impl<'a> Asm<'a> {
                 match self.peek()? {
                     tok @ (Tok::C | Tok::Z | Tok::NC | Tok::NZ) => {
                         self.eat();
-                        self.expect(Tok::COMMA)?;
                         if self.emit {
                             self.write(&[match tok {
                                 Tok::C => 0xD8,
@@ -3437,16 +3457,28 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 // c wasn't an ident, so wasnt eaten
                 if self.string.len() == 0 {
                     self.reader.eat();
+                    if let Some(nc) = self.reader.peek()? {
+                        let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
+                        if let Some(tok) = DIGRAPHS
+                            .iter()
+                            .find_map(|(bs, tok)| (*bs == s).then_some(tok))
+                            .copied()
+                        {
+                            self.reader.eat();
+                            self.stash = Some(tok);
+                            return Ok(tok);
+                        }
+                    }
                 }
-                // check for digraphs
-                if let Some(nc) = self.reader.peek()? {
-                    let s = &[c.to_ascii_uppercase(), nc.to_ascii_uppercase()];
+                // we already ate both chars
+                if self.string.len() == 2 {
+                    let bytes = self.string.as_bytes();
+                    let s = &[bytes[0].to_ascii_uppercase(), bytes[1].to_ascii_uppercase()];
                     if let Some(tok) = DIGRAPHS
                         .iter()
                         .find_map(|(bs, tok)| (*bs == s).then_some(tok))
                         .copied()
                     {
-                        self.reader.eat();
                         self.stash = Some(tok);
                         return Ok(tok);
                     }
