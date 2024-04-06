@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     error::Error,
+    fmt::Write as FmtWrite,
     fs::{self, File},
     io::{self, ErrorKind, Read, Seek, Write},
     mem,
@@ -101,7 +102,7 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     asm.rewind()?;
     asm.pass()?;
 
-    let mut output: Box<dyn Write> = match args.output {
+    let mut output: Box<dyn Write> = match args.output.clone() {
         Some(path) => Box::new(
             File::options()
                 .write(true)
@@ -299,7 +300,15 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
 
     if args.make_depend {
         for include in asm.included {
-            writeln!(output, "{}: {}", args.source.display(), include.display())?;
+            if let Some(ref path) = args.output {
+                writeln!(
+                    output,
+                    "{}: {} {}",
+                    path.display(),
+                    args.source.display(),
+                    include.display()
+                )?;
+            }
         }
     }
 
@@ -337,12 +346,10 @@ struct Asm<'a> {
     toks: Vec<Box<dyn TokStream<'a> + 'a>>,
     str_int: StrInterner<'a>,
     tok_int: SliceInterner<MacroTok<'a>>,
+    loop_int: SliceInterner<LoopTok<'a>>,
     expr_int: SliceInterner<ExprNode<'a>>,
     sections: Vec<Section<'a>>,
     section: usize,
-    native_mode: bool,
-    accum_16: bool,
-    index_16: bool,
     syms: Vec<Sym<'a>>,
     scope: Option<&'a str>,
     emit: bool,
@@ -364,12 +371,10 @@ impl<'a> Asm<'a> {
             toks: vec![Box::new(lexer)],
             str_int,
             tok_int: SliceInterner::new(),
+            loop_int: SliceInterner::new(),
             expr_int: SliceInterner::new(),
             sections: vec![Section::new(code)],
             section: 0,
-            native_mode: false,
-            accum_16: false,
-            index_16: false,
             syms: Vec::new(),
             scope: None,
             emit: false,
@@ -388,9 +393,6 @@ impl<'a> Asm<'a> {
         self.toks.last_mut().unwrap().rewind()?;
         self.sections = vec![Section::new(self.str_int.intern("__CODE__"))];
         self.section = 0;
-        self.native_mode = false;
-        self.accum_16 = false;
-        self.index_16 = false;
         self.scope = None;
         self.emit = true;
         self.if_level = 0;
@@ -557,7 +559,6 @@ impl<'a> Asm<'a> {
                 // is this a directive
                 if let Some(dir) = dir {
                     self.directive(*dir)?;
-                    self.eol()?;
                     continue;
                 }
                 // must be an mnemonic
@@ -2863,6 +2864,7 @@ impl<'a> Asm<'a> {
                     }
                     self.eat();
                 }
+                self.eol()?;
             }
             Dir::DATA16 => {
                 self.eat();
@@ -2883,6 +2885,7 @@ impl<'a> Asm<'a> {
                     }
                     self.eat();
                 }
+                self.eol()?;
             }
             Dir::DATA24 => {
                 self.eat();
@@ -2903,6 +2906,7 @@ impl<'a> Asm<'a> {
                     }
                     self.eat();
                 }
+                self.eol()?;
             }
             Dir::SECTION => {
                 self.eat();
@@ -2925,6 +2929,7 @@ impl<'a> Asm<'a> {
                     index
                 };
                 self.section = index;
+                self.eol()?;
             }
             Dir::PAD => {
                 self.eat();
@@ -2937,6 +2942,7 @@ impl<'a> Asm<'a> {
                     }
                 }
                 self.add_pc(pad)?;
+                self.eol()?;
             }
             Dir::ALIGN => {
                 self.eat();
@@ -2949,6 +2955,7 @@ impl<'a> Asm<'a> {
                     }
                 }
                 self.add_pc(adj)?;
+                self.eol()?;
             }
             Dir::INCLUDE => {
                 self.eat();
@@ -3000,6 +3007,7 @@ impl<'a> Asm<'a> {
                                 || self.str_like(Dir::IFDEF.0)
                                 || self.str_like(Dir::IFNDEF.0)
                                 || self.str_like(Dir::MACRO.0)
+                                || self.str_like(Dir::FOR.0)
                             {
                                 if_level += 1;
                             } else if self.str_like(Dir::END.0) {
@@ -3022,58 +3030,38 @@ impl<'a> Asm<'a> {
                 self.eat();
                 self.if_level -= 1;
             }
-            Dir::INDEX8 => {
-                self.eat();
-                self.index_16 = false;
-            }
-            Dir::INDEX16 => {
-                self.eat();
-                self.index_16 = true;
-            }
-            Dir::ACCUM8 => {
-                self.eat();
-                self.accum_16 = false;
-            }
-            Dir::ACCUM16 => {
-                self.eat();
-                self.accum_16 = true;
-            }
-            Dir::EMULATE => {
-                self.eat();
-                self.native_mode = false;
-            }
-            Dir::NATIVE => {
-                self.eat();
-                self.native_mode = true;
-            }
             Dir::RES => {
                 self.eat();
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 let res = self.range_24(expr)?;
                 self.add_pc(res)?;
+                self.eol()?;
             }
             Dir::MACRO => {
-                self.eat();
-                if self.peek()? != Tok::IDENT {
-                    return Err(self.err("expected macro name"));
-                }
-                let string = self.str_intern();
-                if string.starts_with(".") {
-                    return Err(self.err("macro must be global"));
-                }
-                self.eat();
-                self.macrodef(Label::new(None, string))?;
+                self.macrodef()?;
+            }
+            Dir::FOR => {
+                self.forloop()?;
             }
             _ => unreachable!(),
         }
         Ok(())
     }
 
-    fn macrodef(&mut self, label: Label<'a>) -> io::Result<()> {
+    fn macrodef(&mut self) -> io::Result<()> {
+        self.eat();
+        if self.peek()? != Tok::IDENT {
+            return Err(self.err("expected macro name"));
+        }
+        let string = self.str_intern();
+        if string.starts_with(".") {
+            return Err(self.err("macro must be global"));
+        }
+        self.eat();
+        let label = Label::new(None, string);
         // TODO: check if macro is already defined
         // if we are in the emit pass then its safe to skip
-        self.eol()?;
         let mut toks = Vec::new();
         let mut if_level = 0;
         loop {
@@ -3082,16 +3070,12 @@ impl<'a> Asm<'a> {
                     || self.str_like(Dir::IFDEF.0)
                     || self.str_like(Dir::IFNDEF.0)
                     || self.str_like(Dir::MACRO.0)
+                    || self.str_like(Dir::FOR.0)
                 {
                     if_level += 1;
                 } else if self.str_like(Dir::END.0) {
                     if if_level == 0 {
                         self.eat();
-                        // trim tailing newlines
-                        while let Some(MacroTok::Tok(Tok::NEWLINE)) = toks.last() {
-                            toks.pop();
-                        }
-                        toks.push(MacroTok::Tok(Tok::EOF));
                         break;
                     }
                     if_level -= 1;
@@ -3104,6 +3088,36 @@ impl<'a> Asm<'a> {
                 Tok::NUM => toks.push(MacroTok::Num(self.tok().num())),
                 Tok::ARG => toks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
                 Tok::NARG => toks.push(MacroTok::Narg),
+                Tok::JOIN => {
+                    self.eat();
+                    let mut string = String::new();
+                    loop {
+                        match self.peek()? {
+                            Tok::IDENT => {
+                                string.push_str(self.str());
+                                self.eat();
+                            }
+                            Tok::STR => {
+                                string.push_str(self.str());
+                                self.eat();
+                            }
+                            Tok::NUM => {
+                                let num = self.tok().num();
+                                write!(string, "{num}").map_err(|e| io::Error::other(e))?;
+                                self.eat();
+                            }
+                            _ => {
+                                return Err(self.err("unexpected garbage"));
+                            }
+                        }
+                        if self.peek()? != Tok::COMMA {
+                            break;
+                        }
+                        self.eat();
+                    }
+                    toks.push(MacroTok::Ident(self.str_int.intern(&string)));
+                    continue;
+                }
                 tok => toks.push(MacroTok::Tok(tok)),
             }
             self.eat();
@@ -3113,6 +3127,68 @@ impl<'a> Asm<'a> {
             name: label.string,
             toks,
         });
+        Ok(())
+    }
+
+    fn forloop(&mut self) -> io::Result<()> {
+        let file = self.tok().file();
+        let pos = self.tok().pos();
+        self.eat();
+        if self.peek()? != Tok::IDENT {
+            return Err(self.err("expected variable name"));
+        }
+        let string = self.str_intern();
+        if string.starts_with(".") {
+            return Err(self.err("variable must be global"));
+        }
+        self.eat();
+        self.expect(Tok::COMMA)?;
+        let iter = self.expr()?;
+        let iter = self.const_expr(iter)?;
+        self.expect(Tok::COMMA)?;
+        let end = self.expr()?;
+        let end = self.const_expr(end)?;
+        if iter > end {
+            return Err(self.err("loop start is > end"));
+        }
+        let mut toks = Vec::new();
+        let mut if_level = 0;
+        loop {
+            if self.peek()? == Tok::IDENT {
+                if self.str_like(Dir::IF.0)
+                    || self.str_like(Dir::IFDEF.0)
+                    || self.str_like(Dir::IFNDEF.0)
+                    || self.str_like(Dir::MACRO.0)
+                    || self.str_like(Dir::FOR.0)
+                {
+                    if_level += 1;
+                } else if self.str_like(Dir::END.0) {
+                    if if_level == 0 {
+                        self.eat();
+                        break;
+                    }
+                    if_level -= 1;
+                }
+            }
+            match self.peek()? {
+                Tok::EOF => return Err(self.err("unexpected end of file")),
+                Tok::IDENT if self.str_like(&string) => toks.push(LoopTok::Iter),
+                Tok::IDENT => toks.push(LoopTok::Ident(self.str_intern())),
+                Tok::STR => toks.push(LoopTok::Str(self.str_intern())),
+                Tok::NUM => toks.push(LoopTok::Num(self.tok().num())),
+                tok => toks.push(LoopTok::Tok(tok)),
+            }
+            self.eat();
+        }
+        let toks = self.loop_int.intern(&toks);
+        self.toks.push(Box::new(Loop {
+            toks,
+            index: 0,
+            iter: iter as usize,
+            end: end as usize,
+            file,
+            pos,
+        }));
         Ok(())
     }
 }
@@ -3241,6 +3317,7 @@ impl Dir {
     const NATIVE: Self = Self("?NATIVE");
     const RES: Self = Self("?RES");
     const MACRO: Self = Self("?MACRO");
+    const FOR: Self = Self("?FOR");
 }
 
 const DIRECTIVES: &[Dir] = &[
@@ -3263,6 +3340,7 @@ const DIRECTIVES: &[Dir] = &[
     Dir::NATIVE,
     Dir::RES,
     Dir::MACRO,
+    Dir::FOR,
 ];
 
 const DIGRAPHS: &[(&[u8; 2], Tok)] = &[
@@ -3363,6 +3441,11 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 if let Some(b'\n') = self.reader.peek()? {
                     self.reader.eat();
                     return self.peek(); // TODO shouldn't recurse
+                }
+                if let Some(b'J' | b'j') = self.reader.peek()? {
+                    self.reader.eat();
+                    self.stash = Some(Tok::JOIN);
+                    return Ok(Tok::JOIN);
                 }
                 if let Some(b'#') = self.reader.peek()? {
                     self.reader.eat();
@@ -3484,6 +3567,7 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     }
                 }
                 // must be an identifier
+                // TODO single char idents
                 if self.string.len() > 1 {
                     self.stash = Some(Tok::IDENT);
                     return Ok(Tok::IDENT);
@@ -3560,6 +3644,9 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
     }
 
     fn peek(&mut self) -> io::Result<Tok> {
+        if self.index == self.inner.toks.len() {
+            return Ok(Tok::EOF);
+        }
         match self.inner.toks[self.index] {
             MacroTok::Tok(tok) => Ok(tok),
             MacroTok::Str(_) => Ok(Tok::STR),
@@ -3611,6 +3698,85 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 _ => unreachable!(),
             },
             MacroTok::Narg => self.args.len() as i32,
+            _ => unreachable!(),
+        }
+    }
+
+    fn file(&self) -> &'a str {
+        &self.file
+    }
+
+    fn pos(&self) -> Pos {
+        self.pos
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoopTok<'a> {
+    Tok(Tok),
+    Str(&'a str),
+    Ident(&'a str),
+    Num(i32),
+    Iter,
+}
+
+struct Loop<'a> {
+    toks: &'a [LoopTok<'a>],
+    index: usize,
+    iter: usize,
+    end: usize,
+    file: &'a str,
+    pos: Pos,
+}
+
+impl<'a> TokStream<'a> for Loop<'a> {
+    fn err(&self, msg: &str) -> io::Error {
+        io::Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "{}:{}:{}: in loop index {}: {msg}",
+                self.file, self.pos.0, self.pos.1, self.iter,
+            ),
+        )
+    }
+
+    fn peek(&mut self) -> io::Result<Tok> {
+        if self.iter == self.end {
+            return Ok(Tok::EOF);
+        }
+        match self.toks[self.index] {
+            LoopTok::Tok(tok) => Ok(tok),
+            LoopTok::Str(_) => Ok(Tok::STR),
+            LoopTok::Ident(_) => Ok(Tok::IDENT),
+            LoopTok::Num(_) => Ok(Tok::NUM),
+            LoopTok::Iter => Ok(Tok::NUM),
+        }
+    }
+
+    fn eat(&mut self) {
+        self.index += 1;
+        if self.index == self.toks.len() {
+            self.iter += 1;
+            self.index = 0;
+        }
+    }
+
+    fn rewind(&mut self) -> io::Result<()> {
+        unreachable!()
+    }
+
+    fn str(&self) -> &str {
+        match self.toks[self.index] {
+            LoopTok::Str(string) => string,
+            LoopTok::Ident(string) => string,
+            _ => unreachable!(),
+        }
+    }
+
+    fn num(&self) -> i32 {
+        match self.toks[self.index] {
+            LoopTok::Num(val) => val,
+            LoopTok::Iter => self.iter as i32,
             _ => unreachable!(),
         }
     }

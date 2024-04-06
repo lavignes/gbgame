@@ -25,15 +25,10 @@ syn match basmDirective "?if"
 syn match basmDirective "?ifdef"
 syn match basmDirective "?ifndef"
 syn match basmDirective "?end"
-syn match basmDirective "?index8"
-syn match basmDirective "?index16"
-syn match basmDirective "?accum8"
-syn match basmDirective "?accum16"
-syn match basmDirective "?emulate"
-syn match basmDirective "?native"
 syn match basmDirective "?res"
 syn match basmDirective "?macro"
 syn match basmDirective "?tag"
+syn match basmDirective "?for"
 
 syn match basmComment ";.*" contains=basmTodo
 syn keyword basmTodo contained todo fixme xxx warning danger note notice bug

@@ -12,15 +12,10 @@ LOG_LEVEL := ERROR
 ASM_FLAGS := -l $(LOG_LEVEL) -I include
 LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym --tags game.tags
 
-all: depend game.gbc
+all: game.gbc
 
-toolchain: $(ASM) $(LD)
-
-$(ASM) $(LD):
-	cd $(ASM_PATH) && cargo build --release
-
-game.gbc: $(OBJS)
-	$(LD) $(LD_FLAGS) -o $@ $^
+game.gbc: $(OBJS) $(LD)
+	$(LD) $(LD_FLAGS) -o $@ $(OBJS)
 
 %.o: %.asm $(ASM)
 	$(ASM) $(ASM_FLAGS) -o $@ $<
@@ -28,11 +23,17 @@ game.gbc: $(OBJS)
 %.d: %.asm $(ASM)
 	$(ASM) $(ASM_FLAGS) -M -o $@ $<
 
-depend: $(DEPS)
+$(ASM):
+	cd $(ASM_PATH) && cargo build --release --bin basm
 
+$(LD):
+	cd $(ASM_PATH) && cargo build --release --bin blink
+
+.PHONY: deepclean
 deepclean: clean
 	cd tools/asm && cargo clean
 
+.PHONY: clean
 clean:
 	rm -f $(call rwildcard,src,*.o)
 	rm -f $(call rwildcard,src,*.d)
@@ -40,4 +41,6 @@ clean:
 	rm -f game.sym
 	rm -f game.tags
 
+ifneq ($(filter-out clean deepclean,$(MAKECMDGOALS)),)
 include $(DEPS)
+endif
