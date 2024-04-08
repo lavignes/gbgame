@@ -321,6 +321,7 @@ impl Tok {
     pub const ARG: Self = Self(0x84);
     pub const NARG: Self = Self(0x85);
     pub const JOIN: Self = Self(0x86);
+    pub const SHIFT: Self = Self(0x87);
 
     pub const ASL: Self = Self(0x90); // <<
     pub const ASR: Self = Self(0x91); // >>

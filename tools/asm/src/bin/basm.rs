@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     error::Error,
     fmt::Write as FmtWrite,
     fs::{self, File},
@@ -435,14 +435,14 @@ impl<'a> Asm<'a> {
                         .copied()
                     {
                         self.eat();
-                        let mut args = Vec::new();
+                        let mut args = VecDeque::new();
                         loop {
                             match self.peek()? {
                                 Tok::NEWLINE | Tok::EOF => break,
-                                Tok::IDENT => args.push(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => args.push(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => args.push(MacroTok::Num(self.tok().num())),
-                                tok => args.push(MacroTok::Tok(tok)),
+                                Tok::IDENT => args.push_back(MacroTok::Ident(self.str_intern())),
+                                Tok::STR => args.push_back(MacroTok::Str(self.str_intern())),
+                                Tok::NUM => args.push_back(MacroTok::Num(self.tok().num())),
+                                tok => args.push_back(MacroTok::Tok(tok)),
                             }
                             self.eat();
                             if self.peek()? != Tok::COMMA {
@@ -562,7 +562,6 @@ impl<'a> Asm<'a> {
                     continue;
                 }
                 // must be an mnemonic
-                self.eat();
                 self.operand(*mne.unwrap())?;
             }
             self.eol()?;
@@ -851,14 +850,14 @@ impl<'a> Asm<'a> {
                         let file = self.tok().file();
                         let pos = self.tok().pos();
                         self.eat();
-                        let mut args = Vec::new();
+                        let mut args = VecDeque::new();
                         loop {
                             match self.peek()? {
                                 Tok::NEWLINE | Tok::EOF => break,
-                                Tok::IDENT => args.push(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => args.push(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => args.push(MacroTok::Num(self.tok().num())),
-                                tok => args.push(MacroTok::Tok(tok)),
+                                Tok::IDENT => args.push_back(MacroTok::Ident(self.str_intern())),
+                                Tok::STR => args.push_back(MacroTok::Str(self.str_intern())),
+                                Tok::NUM => args.push_back(MacroTok::Num(self.tok().num())),
+                                tok => args.push_back(MacroTok::Tok(tok)),
                             }
                             self.eat();
                             if self.peek()? != Tok::COMMA {
@@ -3088,6 +3087,7 @@ impl<'a> Asm<'a> {
                 Tok::NUM => toks.push(MacroTok::Num(self.tok().num())),
                 Tok::ARG => toks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
                 Tok::NARG => toks.push(MacroTok::Narg),
+                Tok::SHIFT => toks.push(MacroTok::Shift),
                 Tok::JOIN => {
                     self.eat();
                     let mut string = String::new();
@@ -3447,6 +3447,11 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.stash = Some(Tok::JOIN);
                     return Ok(Tok::JOIN);
                 }
+                if let Some(b'S' | b's') = self.reader.peek()? {
+                    self.reader.eat();
+                    self.stash = Some(Tok::SHIFT);
+                    return Ok(Tok::SHIFT);
+                }
                 if let Some(b'#') = self.reader.peek()? {
                     self.reader.eat();
                     self.stash = Some(Tok::NARG);
@@ -3616,6 +3621,7 @@ enum MacroTok<'a> {
     Num(i32),
     Arg(usize),
     Narg,
+    Shift,
 }
 
 #[derive(Clone, Copy)]
@@ -3627,7 +3633,7 @@ struct Macro<'a> {
 struct MacroInvocation<'a> {
     inner: Macro<'a>,
     index: usize,
-    args: Vec<MacroTok<'a>>,
+    args: VecDeque<MacroTok<'a>>,
     file: &'a str,
     pos: Pos,
 }
@@ -3665,10 +3671,19 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 }
             }
             MacroTok::Narg => Ok(Tok::NUM),
+            MacroTok::Shift => {
+                if self.args.is_empty() {
+                    return Err(self.err("no arguments to shift"));
+                }
+                Ok(Tok::NEWLINE)
+            }
         }
     }
 
     fn eat(&mut self) {
+        if let MacroTok::Shift = self.inner.toks[self.index] {
+            self.args.pop_front();
+        }
         self.index += 1;
     }
 
