@@ -172,12 +172,21 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 memory.pc
             );
         }
+        let files = &section.files;
         let section = sections
             .iter_mut()
             .find(|section| section.name == name)
             .unwrap();
         // we update the section pc to be its absolute start address in memory
         section.pc = aligned;
+        // add any files to the section
+        if let Some(files) = files {
+            for path in files {
+                let mut file = File::open(path)
+                    .map_err(|e| format!("Could not open {}: {e}", path.display()))?;
+                file.read_to_end(&mut section.data)?;
+            }
+        }
         memory.pc = aligned + section.data.len() as u32;
         // the "end" is actually 1 past the last address in the memory
         if memory.pc > memory.end {
@@ -958,6 +967,9 @@ struct ConfigSection {
 
     #[serde(default = "one", deserialize_with = "deserialize_bases_u32")]
     align: u32,
+
+    #[serde(default)]
+    files: Option<Vec<PathBuf>>,
 }
 
 #[derive(Serialize, Deserialize)]
