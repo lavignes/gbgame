@@ -2930,32 +2930,6 @@ impl<'a> Asm<'a> {
                 self.section = index;
                 self.eol()?;
             }
-            Dir::PAD => {
-                self.eat();
-                let expr = self.expr()?;
-                let expr = self.const_expr(expr)?;
-                let pad = self.range_24(expr)?;
-                if self.emit {
-                    for _ in 0..pad {
-                        self.write(&[0]);
-                    }
-                }
-                self.add_pc(pad)?;
-                self.eol()?;
-            }
-            Dir::ALIGN => {
-                self.eat();
-                let expr = self.expr()?;
-                let expr = self.const_expr(expr)?;
-                let adj = self.pc() % self.range_24(expr)?;
-                if self.emit {
-                    for _ in 0..adj {
-                        self.write(&[0]);
-                    }
-                }
-                self.add_pc(adj)?;
-                self.eol()?;
-            }
             Dir::INCLUDE => {
                 self.eat();
                 if self.peek()? != Tok::STR {
@@ -3302,8 +3276,6 @@ impl Dir {
     const DATA16: Self = Self("?DATA16");
     const DATA24: Self = Self("?DATA24");
     const SECTION: Self = Self("?SECTION");
-    const PAD: Self = Self("?PAD");
-    const ALIGN: Self = Self("?ALIGN");
     const INCLUDE: Self = Self("?INCLUDE");
     const IF: Self = Self("?IF");
     const IFDEF: Self = Self("?IFDEF");
@@ -3325,8 +3297,6 @@ const DIRECTIVES: &[Dir] = &[
     Dir::DATA16,
     Dir::DATA24,
     Dir::SECTION,
-    Dir::PAD,
-    Dir::ALIGN,
     Dir::INCLUDE,
     Dir::IF,
     Dir::IFDEF,

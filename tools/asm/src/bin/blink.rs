@@ -111,6 +111,9 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
 
     for (name, section) in &config.sections {
         let name = ld.str_int.intern(&name);
+        if section.align == 0 {
+            Err(ld.err(&format!("section \"{name}\" has an invalid alignment of 0",)))?;
+        }
         if let Some(memory) = config.memories.get(&section.load) {
             ld.sections.push(Section::new(name));
             match memory.ty {
@@ -161,15 +164,21 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
             .iter_mut()
             .find(|memory| memory.name == section.load)
             .unwrap();
-        // TODO section alignment?
         let define = section.define;
+        let aligned = ((memory.pc + section.align - 1) / section.align) * section.align;
+        if memory.pc != aligned {
+            tracing::trace!(
+                "aligning section \"{name}\" from {} to {aligned}",
+                memory.pc
+            );
+        }
         let section = sections
             .iter_mut()
             .find(|section| section.name == name)
             .unwrap();
         // we update the section pc to be its absolute start address in memory
-        section.pc = memory.pc;
-        memory.pc += section.data.len() as u32;
+        section.pc = aligned;
+        memory.pc = aligned + section.data.len() as u32;
         // the "end" is actually 1 past the last address in the memory
         if memory.pc > memory.end {
             Err(io::Error::new(
@@ -930,6 +939,10 @@ enum SectionType {
     BSS,
 }
 
+fn one() -> u32 {
+    1
+}
+
 #[derive(Serialize, Deserialize)]
 struct ConfigSection {
     load: String,
@@ -942,6 +955,9 @@ struct ConfigSection {
 
     #[serde(default)]
     define: bool,
+
+    #[serde(default = "one", deserialize_with = "deserialize_bases_u32")]
+    align: u32,
 }
 
 #[derive(Serialize, Deserialize)]
