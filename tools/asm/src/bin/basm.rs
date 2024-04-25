@@ -3281,12 +3281,6 @@ impl Dir {
     const IFDEF: Self = Self("?IFDEF");
     const IFNDEF: Self = Self("?IFNDEF");
     const END: Self = Self("?END");
-    const INDEX8: Self = Self("?INDEX8");
-    const INDEX16: Self = Self("?INDEX16");
-    const ACCUM8: Self = Self("?ACCUM8");
-    const ACCUM16: Self = Self("?ACCUM16");
-    const EMULATE: Self = Self("?EMULATE");
-    const NATIVE: Self = Self("?NATIVE");
     const RES: Self = Self("?RES");
     const MACRO: Self = Self("?MACRO");
     const FOR: Self = Self("?FOR");
@@ -3302,12 +3296,6 @@ const DIRECTIVES: &[Dir] = &[
     Dir::IFDEF,
     Dir::IFNDEF,
     Dir::END,
-    Dir::INDEX8,
-    Dir::INDEX16,
-    Dir::ACCUM8,
-    Dir::ACCUM16,
-    Dir::EMULATE,
-    Dir::NATIVE,
     Dir::RES,
     Dir::MACRO,
     Dir::FOR,
