@@ -453,6 +453,7 @@ impl<'a> Asm<'a> {
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
                             index: 0,
+                            join_buf: String::new(),
                             args,
                             file,
                             pos,
@@ -868,6 +869,7 @@ impl<'a> Asm<'a> {
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
                             index: 0,
+                            join_buf: String::new(),
                             args,
                             file,
                             pos,
@@ -3064,20 +3066,23 @@ impl<'a> Asm<'a> {
                 Tok::SHIFT => toks.push(MacroTok::Shift),
                 Tok::JOIN => {
                     self.eat();
-                    let mut string = String::new();
+                    let mut jtoks = Vec::new();
                     loop {
                         match self.peek()? {
                             Tok::IDENT => {
-                                string.push_str(self.str());
+                                jtoks.push(MacroTok::Ident(self.str_intern()));
                                 self.eat();
                             }
                             Tok::STR => {
-                                string.push_str(self.str());
+                                jtoks.push(MacroTok::Str(self.str_intern()));
                                 self.eat();
                             }
                             Tok::NUM => {
-                                let num = self.tok().num();
-                                write!(string, "{num}").map_err(|e| io::Error::other(e))?;
+                                jtoks.push(MacroTok::Num(self.tok().num()));
+                                self.eat();
+                            }
+                            Tok::ARG => {
+                                jtoks.push(MacroTok::Arg((self.tok().num() as usize) - 1));
                                 self.eat();
                             }
                             _ => {
@@ -3089,7 +3094,8 @@ impl<'a> Asm<'a> {
                         }
                         self.eat();
                     }
-                    toks.push(MacroTok::Ident(self.str_int.intern(&string)));
+                    let jtoks = self.tok_int.intern(&jtoks);
+                    toks.push(MacroTok::Join(jtoks));
                     continue;
                 }
                 tok => toks.push(MacroTok::Tok(tok)),
@@ -3117,12 +3123,12 @@ impl<'a> Asm<'a> {
         }
         self.eat();
         self.expect(Tok::COMMA)?;
-        let iter = self.expr()?;
-        let iter = self.const_expr(iter)?;
+        let start = self.expr()?;
+        let start = self.const_expr(start)?;
         self.expect(Tok::COMMA)?;
         let end = self.expr()?;
         let end = self.const_expr(end)?;
-        if iter > end {
+        if start > end {
             return Err(self.err("loop start is > end"));
         }
         let mut toks = Vec::new();
@@ -3150,6 +3156,40 @@ impl<'a> Asm<'a> {
                 Tok::IDENT => toks.push(LoopTok::Ident(self.str_intern())),
                 Tok::STR => toks.push(LoopTok::Str(self.str_intern())),
                 Tok::NUM => toks.push(LoopTok::Num(self.tok().num())),
+                Tok::JOIN => {
+                    self.eat();
+                    let mut jtoks = Vec::new();
+                    loop {
+                        match self.peek()? {
+                            Tok::IDENT if self.str_like(&string) => {
+                                jtoks.push(LoopTok::Iter);
+                                self.eat();
+                            }
+                            Tok::IDENT => {
+                                jtoks.push(LoopTok::Ident(self.str_intern()));
+                                self.eat();
+                            }
+                            Tok::STR => {
+                                jtoks.push(LoopTok::Str(self.str_intern()));
+                                self.eat();
+                            }
+                            Tok::NUM => {
+                                jtoks.push(LoopTok::Num(self.tok().num()));
+                                self.eat();
+                            }
+                            _ => {
+                                return Err(self.err("unexpected garbage"));
+                            }
+                        }
+                        if self.peek()? != Tok::COMMA {
+                            break;
+                        }
+                        self.eat();
+                    }
+                    let jtoks = self.loop_int.intern(&jtoks);
+                    toks.push(LoopTok::Join(jtoks));
+                    continue;
+                }
                 tok => toks.push(LoopTok::Tok(tok)),
             }
             self.eat();
@@ -3158,7 +3198,8 @@ impl<'a> Asm<'a> {
         self.toks.push(Box::new(Loop {
             toks,
             index: 0,
-            iter: iter as usize,
+            join_buf: String::new(),
+            iter: start as usize,
             end: end as usize,
             file,
             pos,
@@ -3580,6 +3621,7 @@ enum MacroTok<'a> {
     Arg(usize),
     Narg,
     Shift,
+    Join(&'a [MacroTok<'a>]),
 }
 
 #[derive(Clone, Copy)]
@@ -3591,6 +3633,7 @@ struct Macro<'a> {
 struct MacroInvocation<'a> {
     inner: Macro<'a>,
     index: usize,
+    join_buf: String,
     args: VecDeque<MacroTok<'a>>,
     file: &'a str,
     pos: Pos,
@@ -3635,6 +3678,33 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 }
                 Ok(Tok::NEWLINE)
             }
+            MacroTok::Join(toks) => {
+                self.join_buf.clear();
+                for tok in toks {
+                    match tok {
+                        MacroTok::Ident(string) => self.join_buf.push_str(string),
+                        MacroTok::Str(string) => self.join_buf.push_str(string),
+                        MacroTok::Num(val) => write!(&mut self.join_buf, "{val}").unwrap(),
+                        MacroTok::Arg(index) => match self.args[*index] {
+                            MacroTok::Str(string) => self.join_buf.push_str(string),
+                            MacroTok::Ident(string) => self.join_buf.push_str(string),
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    }
+                }
+                match toks.first().unwrap() {
+                    MacroTok::Ident(_) => Ok(Tok::IDENT),
+                    MacroTok::Str(_) => Ok(Tok::STR),
+                    MacroTok::Num(_) => Ok(Tok::STR),
+                    MacroTok::Arg(index) => match self.args[*index] {
+                        MacroTok::Str(_) => Ok(Tok::STR),
+                        MacroTok::Ident(_) => Ok(Tok::IDENT),
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                }
+            }
         }
     }
 
@@ -3659,6 +3729,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 MacroTok::Ident(string) => string,
                 _ => unreachable!(),
             },
+            MacroTok::Join(_) => &self.join_buf,
             _ => unreachable!(),
         }
     }
@@ -3691,11 +3762,13 @@ enum LoopTok<'a> {
     Ident(&'a str),
     Num(i32),
     Iter,
+    Join(&'a [LoopTok<'a>]),
 }
 
 struct Loop<'a> {
     toks: &'a [LoopTok<'a>],
     index: usize,
+    join_buf: String,
     iter: usize,
     end: usize,
     file: &'a str,
@@ -3723,6 +3796,25 @@ impl<'a> TokStream<'a> for Loop<'a> {
             LoopTok::Ident(_) => Ok(Tok::IDENT),
             LoopTok::Num(_) => Ok(Tok::NUM),
             LoopTok::Iter => Ok(Tok::NUM),
+            LoopTok::Join(toks) => {
+                self.join_buf.clear();
+                for tok in toks {
+                    match tok {
+                        LoopTok::Ident(string) => self.join_buf.push_str(string),
+                        LoopTok::Str(string) => self.join_buf.push_str(string),
+                        LoopTok::Num(val) => write!(&mut self.join_buf, "{val}").unwrap(),
+                        LoopTok::Iter => write!(&mut self.join_buf, "{}", self.iter).unwrap(),
+                        _ => unreachable!(),
+                    }
+                }
+                match toks.first().unwrap() {
+                    LoopTok::Ident(_) => Ok(Tok::IDENT),
+                    LoopTok::Str(_) => Ok(Tok::STR),
+                    LoopTok::Num(_) => Ok(Tok::STR),
+                    LoopTok::Iter => Ok(Tok::STR),
+                    _ => unreachable!(),
+                }
+            }
         }
     }
 
@@ -3742,6 +3834,7 @@ impl<'a> TokStream<'a> for Loop<'a> {
         match self.toks[self.index] {
             LoopTok::Str(string) => string,
             LoopTok::Ident(string) => string,
+            LoopTok::Join(_) => &self.join_buf,
             _ => unreachable!(),
         }
     }

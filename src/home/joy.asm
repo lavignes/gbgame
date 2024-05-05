@@ -37,22 +37,22 @@ JoyUpdate::
 
     ; now we have the button states for this frame in l
     ; AND with JoyPressed to get the held buttons
-    ldh a, [hJoyPressed]
+    ldh a, [joyPressed]
     and a, l
-    ldh [hJoyHeld], a
+    ldh [joyHeld], a
 
     ; AND with cpl to get released buttons this frame
     ld a, l
     cpl
     ld h, a
-    ldh a, [hJoyPressed]
+    ldh a, [joyPressed]
     and a, h
-    ldh [hJoyReleased], a
+    ldh [joyReleased], a
 
     ; finally update the buttons for the current frame
     ; XOR with the current pressed so filter out held
-    ldh a, [hJoyPressed]
+    ldh a, [joyPressed]
     xor a, l
-    ldh [hJoyPressed], a
+    ldh [joyPressed], a
 
     ret

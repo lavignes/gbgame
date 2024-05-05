@@ -1,6 +1,9 @@
 ; vim: ft=basm
 ?section "WRAM0"
 
-wStackTop:: ?res 256
-wStack::
+NTHREADS = 4
 
+?for THREAD, 0, NTHREADS
+\j stackTop, THREAD:: ?res 256
+\j stack, THREAD::
+?end
