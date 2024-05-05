@@ -27,6 +27,7 @@ VideoEnable::
     set HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret
 
+; waits for _any_ blank event
 ; modifies: hl
 VideoWaitForBlank::
     ld hl, HW_STAT

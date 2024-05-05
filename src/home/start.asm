@@ -4,7 +4,7 @@
 ?include "hardware.inc"
 
 Start::
-    ld sp, stack0
+    ld sp, stack
     call StartDoubleSpeedMode
 
     ei

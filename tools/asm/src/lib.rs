@@ -200,6 +200,8 @@ impl<'a> Section<'a> {
 
 pub struct SymFlags;
 
+// TODO make more flags sicne I have the bits to get rid of the weird
+//   hacks like __STATIC__ and __EXPORT__ unit, and __DEFINES__ file
 impl SymFlags {
     pub const NONE: u8 = 0;
     pub const EQU: u8 = 1 << 0;
@@ -305,6 +307,8 @@ impl Tok {
     pub const COLON: Self = Self(b':');
     pub const EQU: Self = Self(b'=');
 
+    // TODO should probably get rid of these so I can support
+    // single-char identifiers
     pub const A: Self = Self(b'A');
     pub const B: Self = Self(b'B');
     pub const C: Self = Self(b'C');

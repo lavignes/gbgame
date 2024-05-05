@@ -48,6 +48,14 @@ HW_LCDC_BIT_SCREEN_ENABLE   = 7
 
 ; LCD status register
 HW_STAT = $FF41
+HW_STAT_MASK_PPU_MODE        = %11
+HW_STAT_BIT_LY_EQUALS_LYC    = 2
+HW_STAT_BIT_MODE0_INT_ENABLE = 3
+HW_STAT_BIT_MODE1_INT_ENABLE = 4
+HW_STAT_BIT_MODE2_INT_ENABLE = 5
+HW_STAT_BIT_LYC_INT_ENABLE   = 6
+
+; LCD scroll
 HW_SCY = $FF42
 HW_SCX = $FF43
 
@@ -86,42 +94,137 @@ HW_HDMA5 = $FF55
 ;; timer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; timer divider (always counting at 64 mcycles, resets to $00 on write)
 HW_DIV = $FF03
+
+; timer counter
 HW_TIMA = $FF04
+
+; timer modulo (reset value on interrupt)
 HW_TMA = $FF05
+
+; timer control
 HW_TAC = $FF06
+HW_TAC_MASK_RATE = %11
+HW_TAC_BIT_ENABLE = 2
+
+HW_TAC_RATE_256_MCYCLES = %00
+HW_TAC_RATE_4_MCYCLES   = %01
+HW_TAC_RATE_16_MCYCLES  = %10
+HW_TAC_RATE_64_MCYCLES  = %11
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; serial and ir
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; serial byte
 HW_SB = $FF01
+
+; serial control
 HW_SC = $FF02
+HW_SC_BIT_CLOCK_MASTER   = 0
+HW_SC_BIT_CLOCK_HI_SPEED = 1
+HW_SC_BIT_TX_ENABLE      = 7
+
+; ir port
 HW_RP = $FF56
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; sound
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; ch1 sweep
+HW_NR10 = $FF10
+
+; ch1 length and duty cycle
+HW_NR11 = $FF11
+
+; ch1 volume and envelope
+HW_NR12 = $FF12
+
+; ch1 period lo
+HW_NR13 = $FF13
+
+; ch1 period hi and control
+HW_NR14 = $FF14
+
+; ch2 length and duty cycle
+HW_NR21 = $FF21
+
+; ch2 volume and envelope
+HW_NR22 = $FF22
+
+; ch2 period lo
+HW_NR23 = $FF23
+
+; ch2 period hi and control
+HW_NR24 = $FF24
+
+; ch3 DAC enable
+HW_NR30 = $FF1A
+
+; ch3 length
+HW_NR31 = $FF1B
+
+; ch3 output level
+HW_NR32 = $FF1C
+
+; ch3 period lo
+HW_NR33 = $FF1D
+
+; ch3 period hi and control
+HW_NR34 = $FF1E
+
+HW_WAVE_RAM_START = $FF30
+HW_WAVE_RAM_END = $FF3F
+
+; ch4 length
+HW_NR41 = $FF20
+
+; ch4 volume and envelope
+HW_NR42 = $FF21
+
+; ch4 frequency and randomness
+HW_NR43 = $FF22
+
+; ch4 control
+HW_NR44 = $FF23
+
+; audio master volume
 HW_NR50 = $FF24
+
+; audo master panning
 HW_NR51 = $FF25
+
+; audio master control
 HW_NR52 = $FF26
+HW_NR52_BIT_CH1_ACTIVE    = 0
+HW_NR52_BIT_CH2_ACTIVE    = 1
+HW_NR52_BIT_CH3_ACTIVE    = 2
+HW_NR52_BIT_CH4_ACTIVE    = 3
+HW_NR52_BIT_MASTER_ENABLE = 7
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; misc
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; joypad
 HW_P1 = $FF00
 HW_P1_BIT_GET_DIRECTION = 4
 HW_P1_BIT_GET_ACTION    = 5
 
+; speed switcher
 HW_KEY1 = $FF4D
 HW_KEY1_BIT_PREPARE_SWITCH = 0
 HW_KEY1_BIT_CURRENT_SPEED  = 7
 
+; vram bank
 HW_VBK = $FF4F
+
+; sram bank
 HW_SVBK = $FF70
 
+; interrupt flags/enable
 HW_IF = $FF0F
 HW_IE = $FFFF
 HW_IF_BIT_VBLANK = 0

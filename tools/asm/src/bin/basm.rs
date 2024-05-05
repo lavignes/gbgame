@@ -354,11 +354,12 @@ struct Asm<'a> {
     scope: Option<&'a str>,
     emit: bool,
     if_level: usize,
-    includes: Vec<PathBuf>,
-    included: HashSet<PathBuf>,
+    includes: Vec<PathBuf>,     // from args
+    included: HashSet<PathBuf>, // for tracking usage with -M flag
 
     macros: Vec<Macro<'a>>,
 
+    // expr parsing
     expr_buffer: Vec<ExprNode<'a>>,
     operator_buffer: Vec<Op>,
 }
@@ -3095,6 +3096,9 @@ impl<'a> Asm<'a> {
                         self.eat();
                     }
                     let jtoks = self.tok_int.intern(&jtoks);
+                    if jtoks.is_empty() {
+                        return Err(self.err("\\j needs inputs"));
+                    }
                     toks.push(MacroTok::Join(jtoks));
                     continue;
                 }
@@ -3187,6 +3191,9 @@ impl<'a> Asm<'a> {
                         self.eat();
                     }
                     let jtoks = self.loop_int.intern(&jtoks);
+                    if jtoks.is_empty() {
+                        return Err(self.err("\\j needs inputs"));
+                    }
                     toks.push(LoopTok::Join(jtoks));
                     continue;
                 }
@@ -3434,7 +3441,7 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 self.stash = Some(Tok::EOF);
                 Ok(Tok::EOF)
             }
-            // macro argument or maybe a skipped newline
+            // macro argument, token directive (\foo), or maybe a skipped newline
             Some(b'\\') => {
                 self.reader.eat();
                 if let Some(b'\n') = self.reader.peek()? {
