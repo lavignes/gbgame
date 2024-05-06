@@ -32,9 +32,9 @@ syn match basmComment ";.*" contains=basmTodo
 syn keyword basmTodo contained todo fixme xxx warning danger note notice bug
 syn region basmString start=+"+ end=+"+
 
-syn match basmNumber "[0-9]\+"
-syn match basmNumber "\$[0-9a-fA-F]\+"
-syn match basmNumber "%[01]\+"
+syn match basmNumber "[0-9][0-9_]*"
+syn match basmNumber "\$[0-9a-fA-F_]\+"
+syn match basmNumber "%[01_]\+"
 syn match basmNumber "'[!-~]"
 
 syn case match

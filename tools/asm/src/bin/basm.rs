@@ -3499,6 +3499,7 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                 // parse number
                 while let Some(c) = self.reader.peek()? {
                     if c == b'_' {
+                        self.reader.eat();
                         continue; // allow '_' separators in numbers
                     }
                     if !c.is_ascii_alphanumeric() {
