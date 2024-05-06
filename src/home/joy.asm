@@ -36,7 +36,7 @@ JoyUpdate::
     ldh [HW_P1], a
 
     ; now we have the button states for this frame in l
-    ; AND with JoyPressed to get the held buttons
+    ; AND with the last frame to get the held buttons
     ldh a, [joyPressed]
     and a, l
     ldh [joyHeld], a

@@ -72,6 +72,8 @@ HW_DMA = $FF46
 HW_BGP = $FF47
 HW_OBP0 = $FF48
 HW_OBP1 = $FF49
+
+; window scroll
 HW_WY = $FF4A
 HW_WX = $FF4B
 
@@ -147,6 +149,8 @@ HW_NR13 = $FF13
 
 ; ch1 period hi and control
 HW_NR14 = $FF14
+HW_NR14_BIT_LENGTH_ENABLE = 6
+HW_NR14_BIT_TRIGGER       = 7
 
 ; ch2 length and duty cycle
 HW_NR21 = $FF21
@@ -198,7 +202,7 @@ HW_NR51 = $FF25
 
 ; audio master control
 HW_NR52 = $FF26
-HW_NR52_BIT_CH1_ACTIVE    = 0
+HW_NR52_BIT_CH1_ACTIVE    = 0 ; active means the channel is playnig audio
 HW_NR52_BIT_CH2_ACTIVE    = 1
 HW_NR52_BIT_CH3_ACTIVE    = 2
 HW_NR52_BIT_CH4_ACTIVE    = 3

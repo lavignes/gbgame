@@ -3,7 +3,9 @@
 
 ?include "hardware.inc"
 
-EntryPoint:
+; post-boot vector always preceeds the header
+; this gives us just enough space to disable interrupts and jump to Start
+PostBoot:
     di
     jp Start
 

@@ -20,6 +20,7 @@ VideoDisable::
     ; disable screen
     ld hl, HW_LCDC
     res HW_LCDC_BIT_SCREEN_ENABLE, [hl]
+    ret
 
 ; modifies: hl
 VideoEnable::
@@ -28,6 +29,7 @@ VideoEnable::
     ret
 
 ; waits for _any_ blank event
+;
 ; modifies: hl
 VideoWaitForBlank::
     ld hl, HW_STAT

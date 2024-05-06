@@ -3,9 +3,21 @@
 
 ?include "hardware.inc"
 
+Boop:
+    ld a, (1 << HW_NR52_BIT_MASTER_ENABLE)
+    ldh [HW_NR52], a
+    ld a, $FF
+    ldh [HW_NR51], a
+    ld a, %0_111_0_111
+    ld a, (1 << HW_NR14_BIT_TRIGGER)
+    ldh [HW_NR14], a
+    ret
+
 Start::
     ld sp, stack
     call StartDoubleSpeedMode
+
+    call Boop
 
     ei
     jr *

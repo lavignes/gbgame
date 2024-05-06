@@ -1598,6 +1598,7 @@ impl<'a> Asm<'a> {
                 self.eat();
                 match self.peek()? {
                     tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::AF) => {
+                        self.eat();
                         if self.emit {
                             self.write(&[match tok {
                                 Tok::BC => 0xC5,
@@ -1617,6 +1618,7 @@ impl<'a> Asm<'a> {
                 self.eat();
                 match self.peek()? {
                     tok @ (Tok::BC | Tok::DE | Tok::HL | Tok::AF) => {
+                        self.eat();
                         if self.emit {
                             self.write(&[match tok {
                                 Tok::BC => 0xC1,
