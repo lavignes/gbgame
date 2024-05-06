@@ -3,7 +3,6 @@
 
 ?include "hardware.inc"
 
-; modifies a, hl
 JoyUpdate::
     ld a, (1 << HW_P1_BIT_GET_DIRECTION)
     ldh [HW_P1], a

@@ -358,6 +358,7 @@ struct Asm<'a> {
     included: HashSet<PathBuf>, // for tracking usage with -M flag
 
     macros: Vec<Macro<'a>>,
+    unique: usize, // unique id generator for macro invocations
 
     // expr parsing
     expr_buffer: Vec<ExprNode<'a>>,
@@ -384,6 +385,7 @@ impl<'a> Asm<'a> {
             included: HashSet::new(),
 
             macros: Vec::new(),
+            unique: 0,
 
             expr_buffer: Vec::new(),
             operator_buffer: Vec::new(),
@@ -397,6 +399,7 @@ impl<'a> Asm<'a> {
         self.scope = None;
         self.emit = true;
         self.if_level = 0;
+        self.unique = 0;
         Ok(())
     }
 
@@ -456,12 +459,14 @@ impl<'a> Asm<'a> {
                             if self.peek()? == Tok::COMMA {
                                 self.eat();
                                 let iarg = self.tok_int.intern(&arg);
-                                args.push_pack(iarg);
+                                args.push_back(iarg);
                                 arg.clear();
                             }
                         }
+                        self.unique += 1;
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
+                            unique: self.unique,
                             index: 0,
                             join_buf: String::new(),
                             args,
@@ -869,7 +874,7 @@ impl<'a> Asm<'a> {
                                 Tok::NEWLINE | Tok::EOF => {
                                     if !arg.is_empty() {
                                         let arg = self.tok_int.intern(&arg);
-                                        self.args.push_back(arg);
+                                        args.push_back(arg);
                                     }
                                     break;
                                 }
@@ -882,12 +887,14 @@ impl<'a> Asm<'a> {
                             if self.peek()? == Tok::COMMA {
                                 self.eat();
                                 let iarg = self.tok_int.intern(&arg);
-                                self.args.push_back(iarg);
-                                args.clear();
+                                args.push_back(iarg);
+                                arg.clear();
                             }
                         }
+                        self.unique += 1;
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
+                            unique: self.unique,
                             index: 0,
                             join_buf: String::new(),
                             args,
@@ -3086,6 +3093,7 @@ impl<'a> Asm<'a> {
                 Tok::NUM => toks.push(MacroTok::Num(self.tok().num())),
                 Tok::ARG => toks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
                 Tok::NARG => toks.push(MacroTok::Narg),
+                Tok::UNIQ => toks.push(MacroTok::Uniq),
                 Tok::SHIFT => toks.push(MacroTok::Shift),
                 Tok::JOIN => {
                     self.eat();
@@ -3107,6 +3115,9 @@ impl<'a> Asm<'a> {
                             Tok::ARG => {
                                 jtoks.push(MacroTok::Arg((self.tok().num() as usize) - 1));
                                 self.eat();
+                            }
+                            Tok::UNIQ => {
+                                jtoks.push(MacroTok::Uniq);
                             }
                             _ => {
                                 return Err(self.err("unexpected garbage"));
@@ -3485,6 +3496,11 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.stash = Some(Tok::NARG);
                     return Ok(Tok::NARG);
                 }
+                if let Some(b'U' | b'u') = self.reader.peek()? {
+                    self.reader.eat();
+                    self.stash = Some(Tok::UNIQ);
+                    return Ok(Tok::UNIQ);
+                }
                 while let Some(c) = self.reader.peek()? {
                     if !c.is_ascii_digit() {
                         break;
@@ -3651,6 +3667,7 @@ enum MacroTok<'a> {
     Arg(usize),
     Narg,
     Shift,
+    Uniq,
     Join(&'a [MacroTok<'a>]),
 }
 
@@ -3662,6 +3679,7 @@ struct Macro<'a> {
 
 struct MacroInvocation<'a> {
     inner: Macro<'a>,
+    unique: usize,
     index: usize,
     join_buf: String,
     args: VecDeque<&'a [MacroTok<'a>]>,
@@ -3709,6 +3727,11 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 }
                 Ok(Tok::NEWLINE)
             }
+            MacroTok::Uniq => {
+                self.join_buf.clear();
+                write!(&mut self.join_buf, "_{}", self.unique).unwrap();
+                Ok(Tok::IDENT)
+            }
             MacroTok::Join(toks) => {
                 self.join_buf.clear();
                 for tok in toks {
@@ -3721,6 +3744,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                             MacroTok::Ident(string) => self.join_buf.push_str(string),
                             _ => unreachable!(),
                         },
+                        MacroTok::Uniq => write!(&mut self.join_buf, "_{}", self.unique).unwrap(),
                         _ => unreachable!(),
                     }
                 }
@@ -3733,6 +3757,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                         MacroTok::Ident(_) => Ok(Tok::IDENT),
                         _ => unreachable!(),
                     },
+                    MacroTok::Uniq => Ok(Tok::IDENT),
                     _ => unreachable!(),
                 }
             }
@@ -3741,7 +3766,9 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
 
     fn eat(&mut self) {
         match self.inner.toks[self.index] {
-            MacroTok::Shift => self.args.pop_front(),
+            MacroTok::Shift => {
+                self.args.pop_front();
+            }
             MacroTok::Arg(index) => {
                 self.arg_index += 1;
                 if self.arg_index < self.args[index].len() {
@@ -3769,6 +3796,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 _ => unreachable!(),
             },
             MacroTok::Join(_) => &self.join_buf,
+            MacroTok::Uniq => &self.join_buf,
             _ => unreachable!(),
         }
     }

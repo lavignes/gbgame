@@ -3,7 +3,6 @@
 
 ?include "hardware.inc"
 
-; modifies a, hl
 VideoDisable::
     ; already disabled?
     ld hl, HW_LCDC
@@ -22,15 +21,12 @@ VideoDisable::
     res HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret
 
-; modifies: hl
 VideoEnable::
     ld hl, HW_LCDC
     set HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret
 
 ; waits for _any_ blank event
-;
-; modifies: hl
 VideoWaitForBlank::
     ld hl, HW_STAT
 .wait:

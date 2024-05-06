@@ -1,8 +1,8 @@
 ; vim: ft=basm
 ?section "VECTORS"
 
-?macro ALIGN
-?for __, 0, \1 - *
+?macro PAD
+?for __, 0, \1
     nop
 ?end
 ?end
@@ -23,26 +23,26 @@ RstJumpTable::
     jp hl
 
 ; short-hand for calling FarCallHL
-ALIGN $10
+PAD $10 - *
 RstFarCall::
     jp FarCallHL
 
-ALIGN $40
+PAD $40 - *
 IntVBlank:
     reti
 
-ALIGN $48
+PAD $48 - *
 IntLcd:
     reti
 
-ALIGN $50
+PAD $50 - *
 IntTimer:
     reti
 
-ALIGN $58
+PAD $58 - *
 IntSerial:
     reti
 
-ALIGN $60
+PAD $60 - *
 IntJoypad:
     reti
