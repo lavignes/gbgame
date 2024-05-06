@@ -437,25 +437,35 @@ impl<'a> Asm<'a> {
                     {
                         self.eat();
                         let mut args = VecDeque::new();
+                        let mut arg = Vec::new();
                         loop {
                             match self.peek()? {
-                                Tok::NEWLINE | Tok::EOF => break,
-                                Tok::IDENT => args.push_back(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => args.push_back(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => args.push_back(MacroTok::Num(self.tok().num())),
-                                tok => args.push_back(MacroTok::Tok(tok)),
+                                Tok::NEWLINE | Tok::EOF => {
+                                    if !arg.is_empty() {
+                                        let arg = self.tok_int.intern(&arg);
+                                        args.push_back(arg);
+                                    }
+                                    break;
+                                }
+                                Tok::IDENT => arg.push(MacroTok::Ident(self.str_intern())),
+                                Tok::STR => arg.push(MacroTok::Str(self.str_intern())),
+                                Tok::NUM => arg.push(MacroTok::Num(self.tok().num())),
+                                tok => arg.push(MacroTok::Tok(tok)),
                             }
                             self.eat();
-                            if self.peek()? != Tok::COMMA {
-                                break;
+                            if self.peek()? == Tok::COMMA {
+                                self.eat();
+                                let iarg = self.tok_int.intern(&arg);
+                                args.push_pack(iarg);
+                                arg.clear();
                             }
-                            self.eat();
                         }
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
                             index: 0,
                             join_buf: String::new(),
                             args,
+                            arg_index: 0,
                             file,
                             pos,
                         }));
@@ -853,25 +863,35 @@ impl<'a> Asm<'a> {
                         let pos = self.tok().pos();
                         self.eat();
                         let mut args = VecDeque::new();
+                        let mut arg = Vec::new();
                         loop {
                             match self.peek()? {
-                                Tok::NEWLINE | Tok::EOF => break,
-                                Tok::IDENT => args.push_back(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => args.push_back(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => args.push_back(MacroTok::Num(self.tok().num())),
-                                tok => args.push_back(MacroTok::Tok(tok)),
+                                Tok::NEWLINE | Tok::EOF => {
+                                    if !arg.is_empty() {
+                                        let arg = self.tok_int.intern(&arg);
+                                        self.args.push_back(arg);
+                                    }
+                                    break;
+                                }
+                                Tok::IDENT => arg.push(MacroTok::Ident(self.str_intern())),
+                                Tok::STR => arg.push(MacroTok::Str(self.str_intern())),
+                                Tok::NUM => arg.push(MacroTok::Num(self.tok().num())),
+                                tok => arg.push(MacroTok::Tok(tok)),
                             }
                             self.eat();
-                            if self.peek()? != Tok::COMMA {
-                                break;
+                            if self.peek()? == Tok::COMMA {
+                                self.eat();
+                                let iarg = self.tok_int.intern(&arg);
+                                self.args.push_back(iarg);
+                                args.clear();
                             }
-                            self.eat();
                         }
                         self.toks.push(Box::new(MacroInvocation {
                             inner: mac,
                             index: 0,
                             join_buf: String::new(),
                             args,
+                            arg_index: 0,
                             file,
                             pos,
                         }));
@@ -3642,7 +3662,8 @@ struct MacroInvocation<'a> {
     inner: Macro<'a>,
     index: usize,
     join_buf: String,
-    args: VecDeque<MacroTok<'a>>,
+    args: VecDeque<&'a [MacroTok<'a>]>,
+    arg_index: usize,
     file: &'a str,
     pos: Pos,
 }
@@ -3671,7 +3692,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                 if index >= self.args.len() {
                     return Err(self.err("argument is undefined"));
                 }
-                match self.args[index] {
+                match self.args[index][self.arg_index] {
                     MacroTok::Tok(tok) => Ok(tok),
                     MacroTok::Str(_) => Ok(Tok::STR),
                     MacroTok::Ident(_) => Ok(Tok::IDENT),
@@ -3693,7 +3714,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                         MacroTok::Ident(string) => self.join_buf.push_str(string),
                         MacroTok::Str(string) => self.join_buf.push_str(string),
                         MacroTok::Num(val) => write!(&mut self.join_buf, "{val}").unwrap(),
-                        MacroTok::Arg(index) => match self.args[*index] {
+                        MacroTok::Arg(index) => match self.args[*index][self.arg_index] {
                             MacroTok::Str(string) => self.join_buf.push_str(string),
                             MacroTok::Ident(string) => self.join_buf.push_str(string),
                             _ => unreachable!(),
@@ -3705,7 +3726,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                     MacroTok::Ident(_) => Ok(Tok::IDENT),
                     MacroTok::Str(_) => Ok(Tok::STR),
                     MacroTok::Num(_) => Ok(Tok::STR),
-                    MacroTok::Arg(index) => match self.args[*index] {
+                    MacroTok::Arg(index) => match self.args[*index][self.arg_index] {
                         MacroTok::Str(_) => Ok(Tok::STR),
                         MacroTok::Ident(_) => Ok(Tok::IDENT),
                         _ => unreachable!(),
@@ -3717,8 +3738,16 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
     }
 
     fn eat(&mut self) {
-        if let MacroTok::Shift = self.inner.toks[self.index] {
-            self.args.pop_front();
+        match self.inner.toks[self.index] {
+            MacroTok::Shift => self.args.pop_front(),
+            MacroTok::Arg(index) => {
+                self.arg_index += 1;
+                if self.arg_index < self.args[index].len() {
+                    return;
+                }
+                self.arg_index = 0;
+            }
+            _ => {}
         }
         self.index += 1;
     }
@@ -3732,7 +3761,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
         match self.inner.toks[self.index] {
             MacroTok::Str(string) => string,
             MacroTok::Ident(string) => string,
-            MacroTok::Arg(index) => match self.args[index] {
+            MacroTok::Arg(index) => match self.args[index][self.arg_index] {
                 MacroTok::Str(string) => string,
                 MacroTok::Ident(string) => string,
                 _ => unreachable!(),
@@ -3745,7 +3774,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
     fn num(&self) -> i32 {
         match self.inner.toks[self.index] {
             MacroTok::Num(val) => val,
-            MacroTok::Arg(index) => match self.args[index] {
+            MacroTok::Arg(index) => match self.args[index][self.arg_index] {
                 MacroTok::Num(val) => val,
                 _ => unreachable!(),
             },
