@@ -3826,7 +3826,7 @@ impl<'a> TokStream<'a> for Loop<'a> {
     }
 
     fn peek(&mut self) -> io::Result<Tok> {
-        if self.iter == self.end {
+        if self.iter > self.end {
             return Ok(Tok::EOF);
         }
         match self.toks[self.index] {

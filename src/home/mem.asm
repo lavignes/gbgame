@@ -1,20 +1,22 @@
 ; vim: ft=basm
 ?section "HOME"
 
-; copy c bytes from de to hl
+; copy bc bytes from de to hl
 MemCopy::
-    or a, c
+    ld a, c
+    or a, b
     ret z
     ldi a, [hl]
     ld [de], a
     inc de
-    dec c
+    dec bc
     jr MemCopy
 
-; set c bytes to a starting at hl
+; set bc bytes to a starting at hl
 MemSet::
-    or a, c
+    ld a, c
+    or a, b
     ret z
     ldi [hl], a
-    dec c
+    dec bc
     jr MemSet

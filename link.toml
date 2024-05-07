@@ -49,12 +49,12 @@ SRAM1 = { load = "SRAM1", type = "bss", tags = { bank = "$01" } }
 #########################################
 ## WRAM
 #########################################
-WRAM0 = { load = "WRAM0", type = "bss", tags = { bank = "$0" } }
-WRAM1 = { load = "WRAM1", type = "bss" , tags = { bank = "$1" } }
-WRAM2 = { load = "WRAM2", type = "bss" , tags = { bank = "$2" } }
-WRAM3 = { load = "WRAM3", type = "bss" , tags = { bank = "$3" } }
-WRAM4 = { load = "WRAM4", type = "bss" , tags = { bank = "$4" } }
-WRAM5 = { load = "WRAM5", type = "bss" , tags = { bank = "$5" } }
-WRAM6 = { load = "WRAM6", type = "bss" , tags = { bank = "$6" } }
-WRAM7 = { load = "WRAM7", type = "bss" , tags = { bank = "$7" } }
-HRAM = { load = "HRAM", type = "bss" }
+WRAM0 = { load = "WRAM0", type = "bss", define = true, tags = { bank = "$0" } }
+WRAM1 = { load = "WRAM1", type = "bss", define = true, tags = { bank = "$1" } }
+WRAM2 = { load = "WRAM2", type = "bss", define = true, tags = { bank = "$2" } }
+WRAM3 = { load = "WRAM3", type = "bss", define = true, tags = { bank = "$3" } }
+WRAM4 = { load = "WRAM4", type = "bss", define = true, tags = { bank = "$4" } }
+WRAM5 = { load = "WRAM5", type = "bss", define = true, tags = { bank = "$5" } }
+WRAM6 = { load = "WRAM6", type = "bss", define = true, tags = { bank = "$6" } }
+WRAM7 = { load = "WRAM7", type = "bss", define = true, tags = { bank = "$7" } }
+HRAM = { load = "HRAM", type = "bss", define = true }

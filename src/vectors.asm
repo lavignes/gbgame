@@ -2,7 +2,7 @@
 ?section "VECTORS"
 
 ?macro PAD
-?for __, 0, \1
+?for __, 0, \1 - 1
     nop
 ?end
 ?end
@@ -15,8 +15,8 @@ RstJumpTable::
     pop hl    ; pop return address into hl
     add a, l
     ld l, a
-    jr nc, .nocarry
-.nocarry:
+    jr nc, .NoCarry
+.NoCarry:
     ldi a, [hl]
     ld h, [hl]
     ld l, a

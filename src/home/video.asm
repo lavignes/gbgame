@@ -12,9 +12,9 @@ VideoDisable::
     ; wait for vblank
     ld hl, HW_STAT
     ld a, 1
-.wait:
+.Wait:
     cp a, [hl]
-    jr nz, .wait
+    jr nz, .Wait
 
     ; disable screen
     ld hl, HW_LCDC
@@ -29,7 +29,7 @@ VideoEnable::
 ; waits for _any_ blank event
 VideoWaitForBlank::
     ld hl, HW_STAT
-.wait:
+.Wait:
     bit 1, [hl]
-    jr nz, .wait
+    jr nz, .Wait
     ret

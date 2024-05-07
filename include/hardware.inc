@@ -225,7 +225,7 @@ HW_KEY1_BIT_CURRENT_SPEED  = 7
 ; vram bank
 HW_VBK = $FF4F
 
-; sram bank
+; wram bank
 HW_SVBK = $FF70
 
 ; interrupt flags/enable
