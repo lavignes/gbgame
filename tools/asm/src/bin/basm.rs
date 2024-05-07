@@ -2868,7 +2868,7 @@ impl<'a> Asm<'a> {
 
     fn directive(&mut self, dir: Dir) -> io::Result<()> {
         match dir {
-            Dir::DATA8 => {
+            Dir::BYTE => {
                 self.eat();
                 loop {
                     if self.peek()? == Tok::STR {
@@ -2897,7 +2897,7 @@ impl<'a> Asm<'a> {
                 }
                 self.eol()?;
             }
-            Dir::DATA16 => {
+            Dir::DBYTE => {
                 self.eat();
                 loop {
                     let pos = self.tok().pos();
@@ -2918,7 +2918,7 @@ impl<'a> Asm<'a> {
                 }
                 self.eol()?;
             }
-            Dir::DATA24 => {
+            Dir::TBYTE => {
                 self.eat();
                 loop {
                     let pos = self.tok().pos();
@@ -3100,29 +3100,14 @@ impl<'a> Asm<'a> {
                     let mut jtoks = Vec::new();
                     loop {
                         match self.peek()? {
-                            Tok::IDENT => {
-                                jtoks.push(MacroTok::Ident(self.str_intern()));
-                                self.eat();
-                            }
-                            Tok::STR => {
-                                jtoks.push(MacroTok::Str(self.str_intern()));
-                                self.eat();
-                            }
-                            Tok::NUM => {
-                                jtoks.push(MacroTok::Num(self.tok().num()));
-                                self.eat();
-                            }
-                            Tok::ARG => {
-                                jtoks.push(MacroTok::Arg((self.tok().num() as usize) - 1));
-                                self.eat();
-                            }
-                            Tok::UNIQ => {
-                                jtoks.push(MacroTok::Uniq);
-                            }
-                            _ => {
-                                return Err(self.err("unexpected garbage"));
-                            }
+                            Tok::IDENT => jtoks.push(MacroTok::Ident(self.str_intern())),
+                            Tok::STR => jtoks.push(MacroTok::Str(self.str_intern())),
+                            Tok::NUM => jtoks.push(MacroTok::Num(self.tok().num())),
+                            Tok::ARG => jtoks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
+                            Tok::UNIQ => jtoks.push(MacroTok::Uniq),
+                            _ => return Err(self.err("unexpected garbage")),
                         }
+                        self.eat();
                         if self.peek()? != Tok::COMMA {
                             break;
                         }
@@ -3198,26 +3183,13 @@ impl<'a> Asm<'a> {
                     let mut jtoks = Vec::new();
                     loop {
                         match self.peek()? {
-                            Tok::IDENT if self.str_like(&string) => {
-                                jtoks.push(LoopTok::Iter);
-                                self.eat();
-                            }
-                            Tok::IDENT => {
-                                jtoks.push(LoopTok::Ident(self.str_intern()));
-                                self.eat();
-                            }
-                            Tok::STR => {
-                                jtoks.push(LoopTok::Str(self.str_intern()));
-                                self.eat();
-                            }
-                            Tok::NUM => {
-                                jtoks.push(LoopTok::Num(self.tok().num()));
-                                self.eat();
-                            }
-                            _ => {
-                                return Err(self.err("unexpected garbage"));
-                            }
+                            Tok::IDENT if self.str_like(&string) => jtoks.push(LoopTok::Iter),
+                            Tok::IDENT => jtoks.push(LoopTok::Ident(self.str_intern())),
+                            Tok::STR => jtoks.push(LoopTok::Str(self.str_intern())),
+                            Tok::NUM => jtoks.push(LoopTok::Num(self.tok().num())),
+                            _ => return Err(self.err("unexpected garbage")),
                         }
+                        self.eat();
                         if self.peek()? != Tok::COMMA {
                             break;
                         }
@@ -3353,9 +3325,9 @@ const MNEMONICS: &[Mne] = &[
 struct Dir(&'static str);
 
 impl Dir {
-    const DATA8: Self = Self("?DATA8");
-    const DATA16: Self = Self("?DATA16");
-    const DATA24: Self = Self("?DATA24");
+    const BYTE: Self = Self("?BYTE");
+    const DBYTE: Self = Self("?DBYTE");
+    const TBYTE: Self = Self("?TBYTE");
     const SECTION: Self = Self("?SECTION");
     const INCLUDE: Self = Self("?INCLUDE");
     const IF: Self = Self("?IF");
@@ -3368,9 +3340,9 @@ impl Dir {
 }
 
 const DIRECTIVES: &[Dir] = &[
-    Dir::DATA8,
-    Dir::DATA16,
-    Dir::DATA24,
+    Dir::BYTE,
+    Dir::DBYTE,
+    Dir::TBYTE,
     Dir::SECTION,
     Dir::INCLUDE,
     Dir::IF,

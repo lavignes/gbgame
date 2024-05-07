@@ -14,9 +14,9 @@ syn keyword basmOpcode ld ldd ldi ldh push pop add adc sub sbc and or xor cp inc
 syn keyword basmOpcode daa cpl ccf scf nop halt stop di ei rlca rla rrca rra rlc rl rrc rr
 syn keyword basmOpcode sla sra srl bit set res jp jr call rst ret reti
 
-syn match basmDirective "?data8"
-syn match basmDirective "?data16"
-syn match basmDirective "?data24"
+syn match basmDirective "?byte"
+syn match basmDirective "?dbyte"
+syn match basmDirective "?tbyte"
 syn match basmDirective "?section"
 syn match basmDirective "?include"
 syn match basmDirective "?if"

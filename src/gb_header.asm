@@ -3,10 +3,8 @@
 
 ?include "hardware.inc"
 
-; post-boot vector always preceeds the header
-; this gives us just enough space to disable interrupts and jump to Start
 PostBoot:
-    di
+    nop
     jp Start
 
 HW_ROM_HEADER HW_ROM_HEADER_COMPAT_CGB_ONLY, HW_ROM_HEADER_MBC_RAM_BAT,    \

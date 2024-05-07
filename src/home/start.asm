@@ -3,17 +3,6 @@
 
 ?include "hardware.inc"
 
-?macro TEST
-
-\j PreixTest, \u::
-    nop
-
-?end
-
-TEST
-TEST
-TEST
-
 Boop:
     ld a, (1 << HW_NR52_BIT_MASTER_ENABLE)
     ldh [HW_NR52], a
@@ -25,9 +14,11 @@ Boop:
     ret
 
 Start::
+    di
     ld sp, stack
-    call StartDoubleSpeedMode
 
+    call VideoDisable
+    call StartDoubleSpeedMode
     call Boop
 
     ei

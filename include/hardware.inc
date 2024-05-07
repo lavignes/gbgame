@@ -9,23 +9,23 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
 
 ?macro HW_ROM_HEADER
     ; tendy logo
-    ?data8 $CE, $ED, $66, $66, $CC, $0D, $00, $0B
-    ?data8 $03, $73, $00, $83, $00, $0C, $00, $0D
-    ?data8 $00, $08, $11, $1F, $88, $89, $00, $0E
-    ?data8 $DC, $CC, $6E, $E6, $DD, $DD, $D9, $99
-    ?data8 $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
-    ?data8 $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
+    ?byte $CE, $ED, $66, $66, $CC, $0D, $00, $0B
+    ?byte $03, $73, $00, $83, $00, $0C, $00, $0D
+    ?byte $00, $08, $11, $1F, $88, $89, $00, $0E
+    ?byte $DC, $CC, $6E, $E6, $DD, $DD, $D9, $99
+    ?byte $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
+    ?byte $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
 
-    ?data8 "GAME", $00, $00, $00, $00, $00, $00, $00
-    ?data8 "BASM"
+    ?byte "GAME", $00, $00, $00, $00, $00, $00, $00
+    ?byte "BASM"
 
-    ?data8  \1      ; compat
-    ?data16 $0000   ; license code
-    ?data8  $00     ; no sgb
-    ?data8  \2      ; MBC type
-    ?data8  \3      ; ROM size
-    ?data8  \4      ; SRAM size
-    ?data8  $01     ; international
+    ?byte  \1      ; compat
+    ?dbyte $0000   ; license code
+    ?byte  $00     ; no sgb
+    ?byte  \2      ; MBC type
+    ?byte  \3      ; ROM size
+    ?byte  \4      ; SRAM size
+    ?byte  $01     ; international
 ?end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
