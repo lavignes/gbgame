@@ -3,18 +3,16 @@
 
 ?include "hardware.inc"
 
+; NOTE only call after disabling PPU interrupts
+;
+; TODO should I therefore automatically disable interrupts?
 VideoDisable::
     ; already disabled?
     ld hl, HW_LCDC
     bit HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret z
 
-    ; wait for vblank
-    ld hl, HW_STAT
-    ld a, 1
-.Wait:
-    cp a, [hl]
-    jr nz, .Wait
+    call VideoWaitForVBlank
 
     ; disable screen
     ld hl, HW_LCDC
@@ -26,10 +24,21 @@ VideoEnable::
     set HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret
 
-; waits for _any_ blank event
-VideoWaitForBlank::
+VideoWaitForVBlank::
+    ; wait for vblank
     ld hl, HW_STAT
 .Wait:
-    bit 1, [hl]
+    ld a, [hl]
+    and a, HW_STAT_MASK_PPU_MODE
+    jr nz, .Wait
+    ret
+
+; waits for _any_ blank event
+;
+; TODO should I delete this?
+VideoWaitForAnyBlank::
+    ld hl, HW_STAT
+.Wait:
+    bit 2, [hl] ; drawing modes have bit 2 set
     jr nz, .Wait
     ret

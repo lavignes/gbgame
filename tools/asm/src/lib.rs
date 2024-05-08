@@ -327,6 +327,7 @@ impl Tok {
     pub const JOIN: Self = Self(0x86);
     pub const SHIFT: Self = Self(0x87);
     pub const UNIQ: Self = Self(0x88);
+    pub const TERM: Self = Self(0x89);
 
     pub const ASL: Self = Self(0x90); // <<
     pub const ASR: Self = Self(0x91); // >>

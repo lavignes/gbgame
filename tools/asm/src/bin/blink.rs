@@ -212,10 +212,10 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
                 Pos(0, 0),
                 SymFlags::EQU,
             ));
-            let end = ld.str_int.intern(&format!("__{name}_END__"));
+            let size = ld.str_int.intern(&format!("__{name}_SIZE__"));
             syms.push(Sym::new(
-                Label::new(None, end),
-                Expr::Const(memory.pc as i32),
+                Label::new(None, size),
+                Expr::Const(section.data.len() as i32),
                 def_unit,
                 def_file_section,
                 def_file_section,

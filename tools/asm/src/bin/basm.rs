@@ -443,10 +443,13 @@ impl<'a> Asm<'a> {
                         let mut arg = Vec::new();
                         loop {
                             match self.peek()? {
-                                Tok::NEWLINE | Tok::EOF => {
+                                tok @ (Tok::TERM | Tok::NEWLINE | Tok::EOF) => {
                                     if !arg.is_empty() {
                                         let arg = self.tok_int.intern(&arg);
                                         args.push_back(arg);
+                                    }
+                                    if tok == Tok::TERM {
+                                        self.eat();
                                     }
                                     break;
                                 }
@@ -871,10 +874,13 @@ impl<'a> Asm<'a> {
                         let mut arg = Vec::new();
                         loop {
                             match self.peek()? {
-                                Tok::NEWLINE | Tok::EOF => {
+                                tok @ (Tok::TERM | Tok::NEWLINE | Tok::EOF) => {
                                     if !arg.is_empty() {
                                         let arg = self.tok_int.intern(&arg);
                                         args.push_back(arg);
+                                    }
+                                    if tok == Tok::TERM {
+                                        self.eat();
                                     }
                                     break;
                                 }
@@ -3105,9 +3111,13 @@ impl<'a> Asm<'a> {
                             Tok::NUM => jtoks.push(MacroTok::Num(self.tok().num())),
                             Tok::ARG => jtoks.push(MacroTok::Arg((self.tok().num() as usize) - 1)),
                             Tok::UNIQ => jtoks.push(MacroTok::Uniq),
-                            _ => return Err(self.err("unexpected garbage")),
+                            _ => return Err(self.err("invalid \\j input")),
                         }
                         self.eat();
+                        if self.peek()? == Tok::TERM {
+                            self.eat();
+                            break;
+                        }
                         if self.peek()? != Tok::COMMA {
                             break;
                         }
@@ -3187,9 +3197,13 @@ impl<'a> Asm<'a> {
                             Tok::IDENT => jtoks.push(LoopTok::Ident(self.str_intern())),
                             Tok::STR => jtoks.push(LoopTok::Str(self.str_intern())),
                             Tok::NUM => jtoks.push(LoopTok::Num(self.tok().num())),
-                            _ => return Err(self.err("unexpected garbage")),
+                            _ => return Err(self.err("invalid \\j input")),
                         }
                         self.eat();
+                        if self.peek()? == Tok::TERM {
+                            self.eat();
+                            break;
+                        }
                         if self.peek()? != Tok::COMMA {
                             break;
                         }
@@ -3453,25 +3467,33 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                     self.reader.eat();
                     return self.peek(); // TODO shouldn't recurse
                 }
-                if let Some(b'J' | b'j') = self.reader.peek()? {
-                    self.reader.eat();
-                    self.stash = Some(Tok::JOIN);
-                    return Ok(Tok::JOIN);
-                }
-                if let Some(b'S' | b's') = self.reader.peek()? {
-                    self.reader.eat();
-                    self.stash = Some(Tok::SHIFT);
-                    return Ok(Tok::SHIFT);
-                }
-                if let Some(b'#') = self.reader.peek()? {
-                    self.reader.eat();
-                    self.stash = Some(Tok::NARG);
-                    return Ok(Tok::NARG);
-                }
-                if let Some(b'U' | b'u') = self.reader.peek()? {
-                    self.reader.eat();
-                    self.stash = Some(Tok::UNIQ);
-                    return Ok(Tok::UNIQ);
+                match self.reader.peek()? {
+                    Some(b'J' | b'j') => {
+                        self.reader.eat();
+                        self.stash = Some(Tok::JOIN);
+                        return Ok(Tok::JOIN);
+                    }
+                    Some(b'e' | b'E') => {
+                        self.reader.eat();
+                        self.stash = Some(Tok::TERM);
+                        return Ok(Tok::TERM);
+                    }
+                    Some(b'S' | b's') => {
+                        self.reader.eat();
+                        self.stash = Some(Tok::SHIFT);
+                        return Ok(Tok::SHIFT);
+                    }
+                    Some(b'#') => {
+                        self.reader.eat();
+                        self.stash = Some(Tok::NARG);
+                        return Ok(Tok::NARG);
+                    }
+                    Some(b'U' | b'u') => {
+                        self.reader.eat();
+                        self.stash = Some(Tok::UNIQ);
+                        return Ok(Tok::UNIQ);
+                    }
+                    _ => {}
                 }
                 while let Some(c) = self.reader.peek()? {
                     if !c.is_ascii_digit() {
@@ -3548,7 +3570,7 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                         return Ok(Tok::NUM);
                     }
                 }
-                Err(self.err("unexpected garbage"))
+                Err(self.err("invalid character"))
             }
             // directives, idents, and single chars
             Some(c) => {
@@ -3710,7 +3732,7 @@ impl<'a> TokStream<'a> for MacroInvocation<'a> {
                     match tok {
                         MacroTok::Ident(string) => self.join_buf.push_str(string),
                         MacroTok::Str(string) => self.join_buf.push_str(string),
-                        MacroTok::Num(val) => write!(&mut self.join_buf, "{val}").unwrap(),
+                        MacroTok::Num(val) => write!(&mut self.join_buf, "{val:X}").unwrap(),
                         MacroTok::Arg(index) => match self.args[*index][self.arg_index] {
                             MacroTok::Str(string) => self.join_buf.push_str(string),
                             MacroTok::Ident(string) => self.join_buf.push_str(string),
@@ -3841,7 +3863,7 @@ impl<'a> TokStream<'a> for Loop<'a> {
                     match tok {
                         LoopTok::Ident(string) => self.join_buf.push_str(string),
                         LoopTok::Str(string) => self.join_buf.push_str(string),
-                        LoopTok::Num(val) => write!(&mut self.join_buf, "{val}").unwrap(),
+                        LoopTok::Num(val) => write!(&mut self.join_buf, "{val:X}").unwrap(),
                         LoopTok::Iter => write!(&mut self.join_buf, "{}", self.iter).unwrap(),
                         _ => unreachable!(),
                     }

@@ -14,6 +14,12 @@ ROM06 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
 ROM07 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
 
 #########################################
+## VRAM
+#########################################
+VRAM0 = { start = "$8000", size = "$2000", type = "rw" }
+VRAM1 = { start = "$8000", size = "$2000", type = "rw" }
+
+#########################################
 ## SRAM
 #########################################
 SRAM0 = { start = "$A000", size = "$2000", type = "rw" }
@@ -38,13 +44,19 @@ HRAM = { start = "$FF80", size = "$7E", type = "rw" }
 #########################################
 VECTORS = { load = "VECTORS", type = "ro" }
 GB_HEADER = { load = "GB_HEADER", type = "ro" }
-HOME = { load = "ROM00", type = "ro", tags = { bank = "$00" } }
+HOME = { load = "ROM00", type = "ro", tags = { bank = "$0" } }
+
+#########################################
+## VRAM
+#########################################
+VRAM0 = { load = "VRAM0", type = "bss", define = true, tags = { bank = "$0" } }
+VRAM1 = { load = "VRAM1", type = "bss", define = true, tags = { bank = "$1" } }
 
 #########################################
 ## SRAM
 #########################################
-SRAM0 = { load = "SRAM0", type = "bss", tags = { bank = "$00" } }
-SRAM1 = { load = "SRAM1", type = "bss", tags = { bank = "$01" } }
+SRAM0 = { load = "SRAM0", type = "bss", tags = { bank = "$0" } }
+SRAM1 = { load = "SRAM1", type = "bss", tags = { bank = "$1" } }
 
 #########################################
 ## WRAM

@@ -29,6 +29,22 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
 ?end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; memory map
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+HW_MAP_ROM00_START = $0000
+HW_MAP_ROM00_SIZE  = $4000
+HW_MAP_ROMXX_START = $4000
+HW_MAP_ROMXX_SIZE  = $4000
+HW_MAP_VRAM_START  = $8000
+HW_MAP_VRAM_SIZE   = $2000
+HW_MAP_SRAM_START  = $A000
+HW_MAP_SRAM_SIZE   = $2000
+HW_MAP_WRAM0_START = $C000
+HW_MAP_WRAM0_SIZE  = $1000
+HW_MAP_WRAMX_START = $D000
+HW_MAP_WRAMX_SIZE  = $1000
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; video
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -180,7 +196,7 @@ HW_NR33 = $FF1D
 HW_NR34 = $FF1E
 
 HW_WAVE_RAM_START = $FF30
-HW_WAVE_RAM_END = $FF3F
+HW_WAVE_RAM_SIZE = 16
 
 ; ch4 length
 HW_NR41 = $FF20
