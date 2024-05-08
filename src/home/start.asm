@@ -26,7 +26,7 @@ Start::
     call MemZero
 
     ; we need to be careful and clear wram0
-    ; without making a call and clobbering the stack
+    ; without making a call since we clobber the stack
     ld hl, __WRAM0_START__
     ld bc, __WRAM0_SIZE__
 .ClearWRAM0:

@@ -8,8 +8,6 @@
 ?end
 
 ; jump to address offset by a in table follwing the call
-;
-; modifies a, hl
 RstJumpTable::
     add a, a  ; multiply by 2 since addrs are 16 bits
     pop hl    ; pop return address into hl
