@@ -2,6 +2,7 @@
 ?section "HOME"
 
 ?include "hardware.inc"
+?include "debug.inc"
 
 Boop:
     ld a, (1 << HW_NR52_BIT_MASTER_ENABLE)
@@ -60,9 +61,10 @@ Start::
     ldh [HW_VBK], a
 
     ; TODO methods to set ROM bank
-    ld hl, $2000
     ld a, 1
-    ld [hl], a
+    ld [$2222], a
+
+    PANIC "testing"
 
     ei
     jr *
@@ -87,3 +89,6 @@ StartDoubleSpeedMode:
     stop
 
     ret
+
+StartPanic::
+    jr *

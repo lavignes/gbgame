@@ -5,7 +5,7 @@
 ?for __, 0, \1 - 1
     nop
 ?end
-?end
+?end ; PAD
 
 ; jump to address offset by a in table follwing the call
 RstJumpTable::
@@ -24,6 +24,10 @@ RstJumpTable::
 PAD $10 - *
 RstFarCall::
     jp FarCallHL
+
+PAD $18 - *
+RstJpHL::
+    jp hl
 
 PAD $40 - *
 IntVBlank:

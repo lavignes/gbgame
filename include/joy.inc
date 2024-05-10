@@ -11,4 +11,4 @@ JOY_BIT_LEFT   = 5
 JOY_BIT_UP     = 6
 JOY_BIT_DOWN   = 7
 
-?end
+?end ; JOY_INC
