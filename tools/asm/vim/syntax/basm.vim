@@ -5,7 +5,7 @@ syn match basmIdentifier "[a-z_\.][a-z0-9_\.]*"
 syn match basmGlobalLabel "^[a-z_][a-z0-9_\.]*"
 syn match basmLocalLabel "^\.[a-z_][a-z0-9_]*"
 
-syn keyword basmRegister x y s *
+syn keyword basmRegister a b c d e h l af bc de hl sp
 
 syn match basmOperator display "\%(+\|-\|/\|*\|\^\|\~\|&\||\|!\|>\|<\|%\|=\)=\?"
 syn match basmOperator display "&&\|||\|<<\|>>\|\~>"
@@ -29,7 +29,9 @@ syn match basmDirective "?tag"
 syn match basmDirective "?for"
 
 syn match basmComment ";.*" contains=basmTodo
+syn match basmDocComment ";;.*" contains=basmTodo
 syn keyword basmTodo contained todo fixme xxx warning danger note notice bug
+syn match basmEscape "\\."
 syn region basmString start=+"+ end=+"+
 
 syn match basmNumber "[0-9][0-9_]*"
@@ -40,11 +42,12 @@ syn match basmNumber "'[!-~]"
 syn case match
 
 hi def link basmComment       Comment
+hi def link basmDocComment    DocComment
 hi def link basmNumber        Number
 hi def link basmString	      String
 hi def link basmIdentifier    Identifier
 hi def link basmOpcode        Keyword
-hi def link basmOpcodeNative  Special
+hi def link basmEscape        Special
 hi def link basmDirective     PreProc
 hi def link basmGlobalLabel   Function
 hi def link basmLocalLabel    Function
