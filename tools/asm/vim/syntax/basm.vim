@@ -43,12 +43,12 @@ syn match basmNumber "'[!-~]"
 syn case match
 
 hi def link basmComment       Comment
-hi def link basmDocComment    Underlined
+hi def link basmDocComment    SpecialComment
 hi def link basmNumber        Number
 hi def link basmString	      String
 hi def link basmIdentifier    Identifier
 hi def link basmOpcode        Keyword
-hi def link basmEscape        Special
+hi def link basmEscape        SpecialChar
 hi def link basmDirective     PreProc
 hi def link basmGlobalLabel   Function
 hi def link basmLocalLabel    Function
