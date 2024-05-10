@@ -299,16 +299,10 @@ fn main_real(args: Args) -> Result<(), Box<dyn Error>> {
     }
 
     if args.make_depend {
+        let mut obj = args.source.clone();
+        obj.set_extension("o");
         for include in asm.included {
-            if let Some(ref path) = args.output {
-                writeln!(
-                    output,
-                    "{}: {} {}",
-                    path.display(),
-                    args.source.display(),
-                    include.display()
-                )?;
-            }
+            writeln!(output, "{}: {}", obj.display(), include.display())?;
         }
     }
 

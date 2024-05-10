@@ -12,9 +12,7 @@ LOG_LEVEL := ERROR
 ASM_FLAGS := -l $(LOG_LEVEL) -I include
 LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym --tags game.tags
 
-all: game.gbc
-
-game.gbc: $(OBJS) $(LD)
+game.gbc: $(DEPS) $(OBJS) $(LD)
 	$(LD) $(LD_FLAGS) -o $@ $(OBJS)
 
 %.o: %.asm $(ASM)
@@ -41,6 +39,4 @@ clean:
 	rm -f game.sym
 	rm -f game.tags
 
-ifneq ($(filter-out clean deepclean,$(MAKECMDGOALS)),)
 include $(DEPS)
-endif
