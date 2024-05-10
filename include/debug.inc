@@ -7,14 +7,14 @@ DEBUG_INC = 1
     ld bc, 0
 ?end
 ?if \# > 0
-    ld hl, \j .PanicMessage, \u
-    ld bc, \j .PanicMessageEnd, \u
+    ld hl, \j .PanicMsg, \u
+    ld bc, \j .PanicMsgEnd, \u - \j .PanicMsg, \u
 ?end
     jp StartPanic
 ?if \# > 0
-\j .PanicMessage, \u:
+\j .PanicMsg, \u:
     ?byte \1
-\j .PanicMessageEnd, \u:
+\j .PanicMsgEnd, \u:
 ?end
 ?end ; PANIC
 
