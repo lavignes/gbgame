@@ -6,6 +6,7 @@ syn match basmGlobalLabel "^[a-z_][a-z0-9_\.]*"
 syn match basmLocalLabel "^\.[a-z_][a-z0-9_]*"
 
 syn keyword basmRegister a b c d e h l af bc de hl sp
+syn keyword basmConditions z c nc nz
 
 syn match basmOperator display "\%(+\|-\|/\|*\|\^\|\~\|&\||\|!\|>\|<\|%\|=\)=\?"
 syn match basmOperator display "&&\|||\|<<\|>>\|\~>"
@@ -42,7 +43,7 @@ syn match basmNumber "'[!-~]"
 syn case match
 
 hi def link basmComment       Comment
-hi def link basmDocComment    DocComment
+hi def link basmDocComment    Underlined
 hi def link basmNumber        Number
 hi def link basmString	      String
 hi def link basmIdentifier    Identifier
