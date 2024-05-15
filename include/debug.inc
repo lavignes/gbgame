@@ -18,5 +18,14 @@ DEBUG_INC = 1
 ?end
 ?end ; PANIC
 
+?macro PANIC_EQ
+    push af
+    ld a, \1
+    cp a, \2
+    jr nz, \j .Ok, \u
+    PANIC \3
+\j .Ok, \u:
+    pop af
+?end ; PANIC_EQ
 
 ?end ; DEBUG_INC

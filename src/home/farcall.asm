@@ -1,9 +1,9 @@
 ; vim: ft=basm
 ?section "HOME"
 
-ROM_BANK_SELECT = $2222
+?include "hardware.inc"
 
-; call function at e:hl
+;; call function at e:hl
 ;
 ; NOTE only use this to call functions that dont pass
 ; args via registers or stack
@@ -19,10 +19,10 @@ FarCallHL::
     ld a, e
     ; switch banks
     ldh [romBank], a
-    ld [ROM_BANK_SELECT], a
+    ld [HW_MAP_MBC5_BANK_LO], a
     jp hl
     ; restore bank and return
     pop af
     ld [romBank], a
-    ld [ROM_BANK_SELECT], a
+    ld [HW_MAP_MBC5_BANK_LO], a
     ret

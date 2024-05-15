@@ -33,7 +33,7 @@ VideoWaitForVBlank::
     jr nz, .Wait
     ret
 
-; waits for _any_ blank event
+;; waits for _any_ blank event
 ;
 ; TODO should I delete this?
 VideoWaitForAnyBlank::

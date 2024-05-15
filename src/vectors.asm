@@ -7,7 +7,7 @@
 ?end
 ?end ; PAD
 
-; jump to address offset by a in table follwing the call
+;; jump to address offset by a in table follwing the call
 RstJumpTable::
     add a, a  ; multiply by 2 since addrs are 16 bits
     pop hl    ; pop return address into hl
@@ -20,7 +20,7 @@ RstJumpTable::
     ld l, a
     jp hl
 
-; short-hand for calling FarCallHL
+;; short-hand for calling FarCallHL
 PAD $10 - *
 RstFarCall::
     jp FarCallHL
