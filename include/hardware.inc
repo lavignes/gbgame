@@ -16,15 +16,23 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?byte $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
     ?byte $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
 
-    ?byte "GAME", $00, $00, $00, $00, $00, $00, $00
+    ?byte \1 ; title
+
+    ?if ?len \1 > 11
+        ?fail "game title too long"
+    ?end
+    ?for \u, 0, 11 - ?len \1
+        ?byte $00
+    ?end
+
     ?byte "BASM"
 
-    ?byte  \1      ; compat
+    ?byte  \2      ; compat
     ?dbyte $0000   ; license code
     ?byte  $00     ; no sgb
-    ?byte  \2      ; MBC type
-    ?byte  \3      ; ROM size
-    ?byte  \4      ; SRAM size
+    ?byte  \3      ; MBC type
+    ?byte  \4      ; ROM size
+    ?byte  \5      ; SRAM size
     ?byte  $01     ; international
 ?end ; HW_ROM_HEADER
 
@@ -215,7 +223,7 @@ HW_NR44 = $FF23
 ;; audio master volume
 HW_NR50 = $FF24
 
-;; audo master panning
+;; audio master panning
 HW_NR51 = $FF25
 
 ;; audio master control

@@ -27,7 +27,9 @@ syn match basmDirective "?end"
 syn match basmDirective "?res"
 syn match basmDirective "?macro"
 syn match basmDirective "?tag"
+syn match basmDirective "?len"
 syn match basmDirective "?for"
+syn match basmDirective "?fail"
 
 syn match basmComment ";.*" contains=basmTodo
 syn match basmDocComment ";;.*" contains=basmTodo

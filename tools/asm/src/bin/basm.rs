@@ -931,6 +931,13 @@ impl<'a> Asm<'a> {
                         }
                         let tag = self.str_intern();
                         self.expr_buffer.push(ExprNode::Tag(label, tag));
+                    } else if self.str_like("?LEN") {
+                        self.eat();
+                        if self.peek()? != Tok::STR {
+                            return Err(self.err("expected string"));
+                        }
+                        self.expr_buffer
+                            .push(ExprNode::Const(self.str().len() as i32));
                     } else {
                         let string = self.str_intern();
                         let label = if let Some(index) = string.find('.') {
@@ -3049,6 +3056,13 @@ impl<'a> Asm<'a> {
             Dir::FOR => {
                 self.forloop()?;
             }
+            Dir::FAIL => {
+                self.eat();
+                if self.peek()? != Tok::STR {
+                    return Err(self.err("expected message"));
+                }
+                return Err(self.err(self.str()));
+            }
             _ => unreachable!(),
         }
         Ok(())
@@ -3345,6 +3359,7 @@ impl Dir {
     const RES: Self = Self("?RES");
     const MACRO: Self = Self("?MACRO");
     const FOR: Self = Self("?FOR");
+    const FAIL: Self = Self("?FAIL");
 }
 
 const DIRECTIVES: &[Dir] = &[
@@ -3360,6 +3375,7 @@ const DIRECTIVES: &[Dir] = &[
     Dir::RES,
     Dir::MACRO,
     Dir::FOR,
+    Dir::FAIL,
 ];
 
 const DIGRAPHS: &[(&[u8; 2], Tok)] = &[
