@@ -16,7 +16,7 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?byte $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
     ?byte $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
 
-    ?byte \1 ; title
+    ?byte \1       ; title
 
     ?if ?len \1 > 11
         ?fail "game title too long"
@@ -25,7 +25,7 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
         ?byte $00
     ?end
 
-    ?byte "BASM"
+    ?byte "BASM"   ; manufacturer code
 
     ?byte  \2      ; compat
     ?dbyte $0000   ; license code
@@ -103,9 +103,18 @@ HW_OBP1 = $FF49
 HW_WY = $FF4A
 HW_WX = $FF4B
 
+;; bg palette index
 HW_BCPS = $FF68
+HW_BCPS_BIT_INCREMENT = 7 ; auto-increment index on data write
+
+;; bg palette data
 HW_BCPD = $FF69
+
+;; obj palette index
 HW_OCPS = $FF6A
+HW_OCPS_BIT_INCREMENT = 7 ; auto-increment index on data write
+
+;; obj palette data
 HW_OCPD = $FF6B
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

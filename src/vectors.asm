@@ -1,11 +1,17 @@
 ; vim: ft=basm
 ?section "VECTORS"
 
-?macro PAD
-?for __, 0, \1 - 1
-    nop
-?end
-?end ; PAD
+; naive padding macro. the best way to really ensure this
+; is to place each interrupt in a different section via the
+; linker
+?macro PAD_TO
+    ?for \u, 0, \1 - *
+        nop
+    ?end
+    ?if * != \1
+        ?fail "overflowed!"
+    ?end
+?end ; PAD_TO
 
 ;; jump to address offset by a in table follwing the call
 RstJumpTable::
@@ -21,30 +27,30 @@ RstJumpTable::
     jp hl
 
 ;; short-hand for calling FarCallHL
-PAD $10 - *
+PAD_TO $10
 RstFarCall::
     jp FarCallHL
 
-PAD $18 - *
+PAD_TO $18
 RstJpHL::
     jp hl
 
-PAD $40 - *
+PAD_TO $40
 IntVBlank:
     reti
 
-PAD $48 - *
+PAD_TO $48
 IntLcd:
     reti
 
-PAD $50 - *
+PAD_TO $50
 IntTimer:
     reti
 
-PAD $58 - *
+PAD_TO $58
 IntSerial:
     reti
 
-PAD $60 - *
+PAD_TO $60
 IntJoypad:
     reti

@@ -788,9 +788,6 @@ impl<'a> Asm<'a> {
                 }
                 // always unary
                 tok @ (Tok::BANG | Tok::TILDE) => {
-                    if !seen_val {
-                        return Err(self.err("expected value"));
-                    }
                     self.expr_push_apply(Op::Unary(tok));
                     seen_val = false;
                     self.eat();
@@ -3858,7 +3855,7 @@ impl<'a> TokStream<'a> for Loop<'a> {
     }
 
     fn peek(&mut self) -> io::Result<Tok> {
-        if self.iter > self.end {
+        if self.iter >= self.end {
             return Ok(Tok::EOF);
         }
         match self.toks[self.index] {

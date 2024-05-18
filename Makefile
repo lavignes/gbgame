@@ -11,7 +11,7 @@ OBJS := $(SRCS:.asm=.o)
 DEPS := $(SRCS:.asm=.d)
 
 LOG_LEVEL := ERROR
-ASM_FLAGS := -l $(LOG_LEVEL) -I include
+ASM_FLAGS := -DDEBUG=1 -l $(LOG_LEVEL) -I include
 LD_FLAGS := -c link.toml -l $(LOG_LEVEL) -g game.sym --tags game.tags
 FIX_FLAGS := -l $(LOG_LEVEL)
 
@@ -46,6 +46,6 @@ clean:
 	rm -f game.sym
 	rm -f game.tags
 
-ifneq (,$(filter-out clean deepclean,$(MAKECMDGOALS)))
+ifeq (,$(filter-out clean deepclean,$(MAKECMDGOALS)))
 include $(DEPS)
 endif

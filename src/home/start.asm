@@ -2,8 +2,17 @@
 ?section "HOME"
 
 ?include "hardware.inc"
-?include "debug.inc"
 
+?include "debug.inc"
+?include "color.inc"
+
+MyPalette:
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+
+; TODO delete me
 Boop:
     ld a, (1 << HW_NR52_BIT_MASTER_ENABLE)
     ldh [HW_NR52], a
@@ -29,6 +38,12 @@ Start::
     ldh [romBank], a
     ld [HW_MAP_MBC5_BANK_LO], a
 
+    ld hl, MyPalette
+    ld a, 1
+    ld c, a
+    xor a, a
+    call VideoBGPaletteWrite
+
     ei
 .Halt:
     halt
@@ -52,14 +67,15 @@ StartClearRAM:
     jr .ClearWRAM0
 .ClearWRAM1_7:
     ; clear other wrams
-    ?for BANK, 1, 7
+    ?for BANK, 1, 8
         ld a, BANK
         ldh [HW_SVBK], a
         ld hl, \j __WRAM, BANK, _START__
         ld bc, \j __WRAM, BANK, _SIZE__
         call MemZero
     ?end
-    ?for BANK, 0, 1
+    ; vrams
+    ?for BANK, 0, 2
         ld a, BANK
         ldh [HW_VBK], a
         ld hl, HW_MAP_VRAM_START

@@ -42,3 +42,41 @@ VideoWaitForAnyBlank::
     bit 2, [hl] ; drawing modes have bit 2 set
     jr nz, .Wait
     ret
+
+;; copy c BG palettes from hl to palette index a
+VideoBGPaletteWrite::
+    sla c ; c *= 4
+    sla c
+    add a, a ; a *= 8
+    add a, a
+    add a, a
+    ; load pal index
+    ld de, HW_BCPS
+    set HW_BCPS_BIT_INCREMENT, a ; auto-increment
+    ld [de], a
+    ; de is now HW_BCPD
+    inc de
+.Loop:
+    ; each iteration copies 1 16-bit color
+    ldi a, [hl]
+    ld [de], a
+    ldi a, [hl]
+    ld [de], a
+    dec c
+    jr nz, .Loop
+    ret
+
+;; copy c OBJ palettes from hl to palette index a
+VideoOBJPaletteWrite::
+    sla c ; c *= 4
+    sla c
+    add a, a ; a *= 8
+    add a, a
+    add a, a
+    ; load pal index
+    ld de, HW_OCPS
+    set HW_OCPS_BIT_INCREMENT, a ; auto-increment
+    ld [de], a
+    ; de is now HW_OCPD
+    inc de
+    jr VideoBGPaletteWrite.Loop
