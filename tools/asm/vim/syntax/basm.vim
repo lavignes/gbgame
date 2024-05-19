@@ -35,7 +35,7 @@ syn match basmComment ";.*" contains=basmTodo
 syn match basmDocComment ";;.*" contains=basmTodo
 syn keyword basmTodo contained todo fixme xxx warning danger note notice bug
 syn match basmEscape "\\."
-syn region basmString start=+"+ end=+"+
+syn region basmString start=+"+ end=+"+ contains=basmEscape
 
 syn match basmNumber "[0-9][0-9_]*"
 syn match basmNumber "\$[0-9a-fA-F_]\+"

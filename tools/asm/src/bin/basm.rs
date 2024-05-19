@@ -3560,6 +3560,18 @@ impl<'a, R: Read + Seek> TokStream<'a> for Lexer<'a, R> {
                         self.reader.eat();
                         break;
                     }
+                    if c == b'\\' {
+                        self.reader.eat();
+                        self.string.push(match self.reader.peek()? {
+                            Some(b'n') => b'\n',
+                            Some(b'\\') => b'\\',
+                            Some(b'"') => b'"',
+                            Some(b'0') => b'\0',
+                            _ => return Err(self.err("invalid escape")),
+                        } as char);
+                        self.reader.eat();
+                        continue;
+                    }
                     self.string.push(c as char);
                     self.reader.eat();
                 }
