@@ -2,12 +2,6 @@
 ?ifndef DEBUG_INC
 DEBUG_INC = 1
 
-?macro ASSERT
-    ?if !(\u)
-        ?fail "assertion failed"
-    ?end
-?end ; ASSERT
-
 ?macro PANIC
     ?ifdef DEBUG
         ?if \# == 0

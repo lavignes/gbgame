@@ -39,7 +39,7 @@ VideoWaitForVBlank::
 VideoWaitForAnyBlank::
     ld hl, HW_STAT
 .Wait:
-    bit 2, [hl] ; drawing modes have bit 2 set
+    bit 2, [hl] ; all drawing modes have bit 2 set
     jr nz, .Wait
     ret
 
