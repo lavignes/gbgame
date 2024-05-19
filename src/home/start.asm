@@ -6,6 +6,7 @@
 ?include "debug.inc"
 ?include "color.inc"
 
+; TODO delete me too
 MyPalette:
     COLOR $00, $00, $00
     COLOR $00, $00, $00
@@ -53,6 +54,11 @@ StartClearRAM:
     ld hl, __HRAM_START__
     ld bc, __HRAM_SIZE__
     call MemZero
+    ; place the dma function into hram
+    ld hl, dmaFunction
+    ld de, StartOamDmaFunction
+    ld bc, StartOamDmaFunctionEnd - StartOamDmaFunction
+    call MemCopy
     ; we need to be careful and clear wram0
     ; without making a call since we clobber the stack
     ld hl, __WRAM0_START__
@@ -100,6 +106,24 @@ StartDoubleSpeedMode:
     ldh [HW_P1], a
     stop
     ret
+
+;; copies oam buf into oam via dma
+;
+; this function is copied into/called from hram as the cpu
+; loses bus access during dma
+_TMP = *
+StartOamDmaFunction:
+    ld a, >oamBuf
+    ldh [HW_DMA], a
+    ld a, 40
+.Wait
+    dec a
+    jr nz, .Wait
+    ret
+StartOamDmaFunctionEnd:
+?if (* - _TMP) != 10
+    ?fail "dma function too big"
+?end
 
 ;; print bc bytes of hl to the serial port and halt
 StartPanic::
