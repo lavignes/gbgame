@@ -2228,9 +2228,9 @@ impl<'a> Asm<'a> {
             Mne::HALT => {
                 self.eat();
                 if self.emit {
-                    self.write(&[0x76]);
+                    self.write(&[0x76, 0x00]);
                 }
-                return self.add_pc(1);
+                return self.add_pc(2);
             }
 
             Mne::STOP => {
