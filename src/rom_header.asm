@@ -1,5 +1,5 @@
 ; vim: ft=basm
-?section "GB_HEADER"
+?section "ROM_HEADER"
 
 ?include "hardware.inc"
 

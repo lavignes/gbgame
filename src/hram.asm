@@ -7,6 +7,9 @@ dmaFunction:: ?res 10
 ;; scratch space
 tmp:: ?res 16
 
+;; vblank ocurred flag
+vBlanked:: ?res 1
+
 romBank::  ?res 1
 
 joyPressed::   ?res 1

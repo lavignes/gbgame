@@ -35,8 +35,20 @@ PAD_TO $18
 RstJpHL::
     jp hl
 
+; TODO space for more rst
+
+; rst $38 is encoded as $FF, so accidental execution of
+; $FF bytes will blow up :-)
+PAD_TO $38
+RstPanic::
+    jp StartRstPanic
+
 PAD_TO $40
 IntVBlank:
+    push af
+    ld a, 1
+    ldh [vBlanked], a
+    pop af
     reti
 
 PAD_TO $48

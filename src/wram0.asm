@@ -10,5 +10,5 @@
 oamBuf:: ?res HW_MAP_OAM_SIZE
 
 stackTop:: ?res 256
-stack::
+stackBase::
 

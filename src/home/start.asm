@@ -26,15 +26,19 @@ Boop:
 
 Start::
     di
-    ld sp, stack
-    call StartDoubleSpeedMode
+    ld sp, stackBase
+    call DoubleSpeedMode
     call VideoDisable
     call Boop
-    call StartClearRAM
+    call ClearRAM
     ; reset a bunch of registers
     xor a, a
     ldh [HW_SVBK], a
     ldh [HW_VBK], a
+    ldh [HW_IE], a
+    ldh [HW_IF], a
+    ldh [HW_TMA], a
+    ldh [HW_TAC], a
     ld a, 1
     ldh [romBank], a
     ld [HW_MAP_MBC5_BANK_LO], a
@@ -50,28 +54,28 @@ Start::
     halt
     jr .Halt
 
-StartClearRAM:
+ClearRAM:
     ld hl, __HRAM_START__
     ld bc, __HRAM_SIZE__
     call MemZero
     ; place the dma function into hram
     ld hl, dmaFunction
-    ld de, StartOamDmaFunction
-    ld bc, StartOamDmaFunctionEnd - StartOamDmaFunction
+    ld de, DMAFunction
+    ld bc, DMAFunctionEnd - DMAFunction
     call MemCopy
     ; we need to be careful and clear wram0
     ; without making a call since we clobber the stack
     ld hl, __WRAM0_START__
     ld bc, __WRAM0_SIZE__
-.ClearWRAM0:
+.WRAM0:
     ld a, c
     or a, b
-    jr z, .ClearWRAM1_7
+    jr z, .WRAM1_7
     xor a, a
     ldi [hl], a
     dec bc
-    jr .ClearWRAM0
-.ClearWRAM1_7:
+    jr .WRAM0
+.WRAM1_7:
     ; clear other wrams
     ?for BANK, 1, 8
         ld a, BANK
@@ -90,7 +94,7 @@ StartClearRAM:
     ?end
     ret
 
-StartDoubleSpeedMode:
+DoubleSpeedMode:
     ; exit if already in double speed mode
     ld hl, HW_KEY1
     bit HW_KEY1_BIT_CURRENT_SPEED, [hl]
@@ -110,9 +114,9 @@ StartDoubleSpeedMode:
 ;; copies oam buf into oam via dma
 ;
 ; this function is copied into/called from hram as the cpu
-; loses bus access during dma
+; loses bus access during dma, but hram in on-chip
 _TMP = *
-StartOamDmaFunction:
+DMAFunction:
     ld a, >oamBuf
     ldh [HW_DMA], a
     ld a, 40
@@ -120,13 +124,25 @@ StartOamDmaFunction:
     dec a
     jr nz, .Wait
     ret
-StartOamDmaFunctionEnd:
+DMAFunctionEnd:
 ?if (* - _TMP) != 10
     ?fail "dma function too big"
 ?end
 
+;; called by RstPanic
+StartRstPanic::
+    ld hl, .Msg
+    ld bc, .MsgEnd - .Msg
+    jr StartPanic
+.Msg:
+    ?byte "executed an $FF!"
+.MsgEnd:
+
 ;; print bc bytes of hl to the serial port and halt
 StartPanic::
+    ; TODO need to disable video, load font, disable interrupts,
+    ;   and re-enable video here
+.SendByte:
     ; no more chars?
     ld a, c
     or a, b
@@ -144,7 +160,7 @@ StartPanic::
           (1 << HW_SC_BIT_CLOCK_HI_SPEED) |\
           (1 << HW_SC_BIT_CLOCK_MASTER)
     ldh [HW_SC], a
-    jr StartPanic
+    jr .SendByte
 .Halt:
     halt
     jr .Halt

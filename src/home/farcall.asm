@@ -10,7 +10,7 @@
 FarCallHL::
     ldh a, [romBank]
     ; is that bank already active?
-    ; TODO should I instead just throw an error?
+    ; TODO should I instead just panic?
     cp a, e
     jr nz, .SwitchBanks
     jp hl

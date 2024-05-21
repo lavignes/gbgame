@@ -3,7 +3,7 @@
 ## ROM
 #########################################
 VECTORS = { start = "$0000", size = "$100", type = "ro", fill = "$00" }
-GB_HEADER = { start = "$0100", size = "$50", type = "ro", fill = "$00" }
+ROM_HEADER = { start = "$0100", size = "$50", type = "ro", fill = "$00" }
 ROM00 = { start = "$0150", size = "$3EB0", type = "ro", fill = "$00" }
 ROM01 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
 ROM02 = { start = "$4000", size = "$4000", type = "ro", fill = "$00" }
@@ -43,7 +43,7 @@ HRAM = { start = "$FF80", size = "$7E", type = "rw" }
 ## ROM
 #########################################
 VECTORS = { load = "VECTORS", type = "ro" }
-GB_HEADER = { load = "GB_HEADER", type = "ro" }
+ROM_HEADER = { load = "ROM_HEADER", type = "ro" }
 HOME = { load = "ROM00", type = "ro", tags = { bank = "$0" } }
 
 #########################################
