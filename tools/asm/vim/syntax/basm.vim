@@ -30,6 +30,7 @@ syn match basmDirective "?tag"
 syn match basmDirective "?len"
 syn match basmDirective "?for"
 syn match basmDirective "?fail"
+syn match basmDirective "?struct"
 
 syn match basmComment ";.*" contains=basmTodo
 syn match basmDocComment ";;.*" contains=basmTodo

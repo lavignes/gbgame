@@ -3015,6 +3015,7 @@ impl<'a> Asm<'a> {
                             if self.str_like(Dir::IF.0)
                                 || self.str_like(Dir::IFDEF.0)
                                 || self.str_like(Dir::IFNDEF.0)
+                                || self.str_like(Dir::STRUCT.0)
                                 || self.str_like(Dir::MACRO.0)
                                 || self.str_like(Dir::FOR.0)
                             {
@@ -3062,6 +3063,9 @@ impl<'a> Asm<'a> {
             Dir::FOR => {
                 self.forloop()?;
             }
+            Dir::STRUCT => {
+                self.structdef()?;
+            }
             Dir::FAIL => {
                 self.eat();
                 if self.peek()? != Tok::STR {
@@ -3070,6 +3074,70 @@ impl<'a> Asm<'a> {
                 return Err(self.err(self.str()));
             }
             _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    fn structdef(&mut self) -> io::Result<()> {
+        self.eat();
+        if self.peek()? != Tok::IDENT {
+            return Err(self.err("expected struct name"));
+        }
+        let string = self.str_intern();
+        if string.starts_with(".") {
+            return Err(self.err("struct must be global"));
+        }
+        let pos = self.tok().pos();
+        self.eat();
+        self.eol()?;
+        let label = Label::new(None, string);
+        // TODO: check if struct already defined (similar to macro)
+        let mut size = 0;
+        let unit = self.str_int.intern("__STATIC__");
+        let section = self.sections[self.section].name;
+        loop {
+            if (self.peek()? == Tok::IDENT) && self.str_like(Dir::END.0) {
+                self.eat();
+                break;
+            }
+            if self.peek()? != Tok::IDENT {
+                return Err(self.err("expected field name"));
+            }
+            {
+                let field = self.str_intern();
+                if !field.starts_with(".") {
+                    return Err(self.err("field must have a local label"));
+                }
+                let pos = self.tok().pos();
+                self.eat();
+                let label = Label::new(Some(string), field);
+                let expr = self.expr()?;
+                let expr = self.const_expr(expr)?;
+                if !self.emit {
+                    self.syms.push(Sym::new(
+                        label,
+                        Expr::Const(size),
+                        unit,
+                        section,
+                        self.tok().file(),
+                        pos,
+                        SymFlags::EQU,
+                    ));
+                }
+                size += expr;
+            }
+            self.eol()?;
+        }
+        if !self.emit {
+            self.syms.push(Sym::new(
+                label,
+                Expr::Const(size),
+                unit,
+                section,
+                self.tok().file(),
+                pos,
+                SymFlags::EQU,
+            ));
         }
         Ok(())
     }
@@ -3094,6 +3162,7 @@ impl<'a> Asm<'a> {
                 if self.str_like(Dir::IF.0)
                     || self.str_like(Dir::IFDEF.0)
                     || self.str_like(Dir::IFNDEF.0)
+                    || self.str_like(Dir::STRUCT.0)
                     || self.str_like(Dir::MACRO.0)
                     || self.str_like(Dir::FOR.0)
                 {
@@ -3184,6 +3253,7 @@ impl<'a> Asm<'a> {
                 if self.str_like(Dir::IF.0)
                     || self.str_like(Dir::IFDEF.0)
                     || self.str_like(Dir::IFNDEF.0)
+                    || self.str_like(Dir::STRUCT.0)
                     || self.str_like(Dir::MACRO.0)
                     || self.str_like(Dir::FOR.0)
                 {
@@ -3366,6 +3436,7 @@ impl Dir {
     const MACRO: Self = Self("?MACRO");
     const FOR: Self = Self("?FOR");
     const FAIL: Self = Self("?FAIL");
+    const STRUCT: Self = Self("?STRUCT");
 }
 
 const DIRECTIVES: &[Dir] = &[
@@ -3382,6 +3453,7 @@ const DIRECTIVES: &[Dir] = &[
     Dir::MACRO,
     Dir::FOR,
     Dir::FAIL,
+    Dir::STRUCT,
 ];
 
 const DIGRAPHS: &[(&[u8; 2], Tok)] = &[
