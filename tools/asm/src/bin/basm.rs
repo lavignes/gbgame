@@ -3044,6 +3044,15 @@ impl<'a> Asm<'a> {
                 let expr = self.expr()?;
                 let expr = self.const_expr(expr)?;
                 let res = self.range_24(expr)?;
+                // reserve space by allocating literal bytes
+                // if we dont do this, our current linker will
+                // overlap the same section across objects as pc
+                // does not allocate space on its own
+                if self.emit {
+                    for _ in 0..res {
+                        self.write(&[0x00]);
+                    }
+                }
                 self.add_pc(res)?;
                 self.eol()?;
             }
