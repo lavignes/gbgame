@@ -46,6 +46,6 @@ clean:
 	rm -f game.sym
 	rm -f game.tags
 
-ifneq (,$(filter-out clean deepclean,$(MAKECMDGOALS)))
+ifeq (,$(filter-out clean deepclean,$(MAKECMDGOALS)))
 include $(DEPS)
 endif
