@@ -3083,8 +3083,7 @@ impl<'a> Asm<'a> {
                     continue;
                 }
                 // is this an if-directive?
-                if let Some(dir) = DIRECTIVES.iter().find(|dir| self.str() == dir.0).cloned() {
-                    // TODO: i dont think this works
+                if let Some(dir) = DIRECTIVES.iter().find(|dir| self.str_like(&dir.0)).cloned() {
                     if let Dir::IF | Dir::IFDEF | Dir::IFNDEF = dir {
                         self.ifdirective(dir)?;
                         continue;
