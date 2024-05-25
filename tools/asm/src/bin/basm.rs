@@ -398,13 +398,7 @@ impl<'a> Asm<'a> {
     }
 
     fn pass(&mut self) -> io::Result<()> {
-        loop {
-            if self.peek()? == Tok::EOF {
-                if self.toks.len() <= 1 {
-                    break;
-                }
-                self.toks.pop();
-            }
+        while self.peek()? != Tok::EOF {
             // special case, setting the PC
             if self.peek()? == Tok::STAR {
                 self.eat();
@@ -423,57 +417,17 @@ impl<'a> Asm<'a> {
                 let dir = DIRECTIVES.iter().find(|dir| self.str_like(dir.0));
                 // is this a label?
                 if mne.is_none() && dir.is_none() {
-                    let file = self.tok().file();
-                    let pos = self.tok().pos();
-                    // is this a defined macro?
+                    // is this a macro?
                     if let Some(mac) = self
                         .macros
                         .iter()
                         .find(|mac| self.str() == mac.name)
                         .copied()
                     {
-                        self.eat();
-                        let mut args = VecDeque::new();
-                        let mut arg = Vec::new();
-                        loop {
-                            match self.peek()? {
-                                tok @ (Tok::TERM | Tok::NEWLINE | Tok::EOF) => {
-                                    if !arg.is_empty() {
-                                        let arg = self.tok_int.intern(&arg);
-                                        args.push_back(arg);
-                                    }
-                                    if tok == Tok::TERM {
-                                        self.eat();
-                                    }
-                                    break;
-                                }
-                                Tok::IDENT => arg.push(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => arg.push(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => arg.push(MacroTok::Num(self.tok().num())),
-                                tok => arg.push(MacroTok::Tok(tok)),
-                            }
-                            self.eat();
-                            if self.peek()? == Tok::COMMA {
-                                self.eat();
-                                let iarg = self.tok_int.intern(&arg);
-                                args.push_back(iarg);
-                                arg.clear();
-                            }
-                        }
-                        self.unique += 1;
-                        self.toks.push(Box::new(MacroInvocation {
-                            inner: mac,
-                            unique: self.unique,
-                            index: 0,
-                            join_buf: String::new(),
-                            args,
-                            arg_index: 0,
-                            file,
-                            pos,
-                        }));
+                        self.macroinvoke(mac)?;
                         continue;
                     }
-
+                    let pos = self.tok().pos();
                     let string = self.str_intern();
                     let label = if let Some(index) = string.find('.') {
                         let (scope, string) = string.split_at(index);
@@ -623,7 +577,15 @@ impl<'a> Asm<'a> {
     }
 
     fn peek(&mut self) -> io::Result<Tok> {
-        self.tok_mut().peek()
+        match self.tok_mut().peek() {
+            Ok(Tok::EOF) if self.toks.len() > 1 => {
+                // TODO: yuck recursion
+                self.toks.pop();
+                self.eat();
+                self.peek()
+            }
+            tok => tok,
+        }
     }
 
     fn eat(&mut self) {
@@ -656,14 +618,8 @@ impl<'a> Asm<'a> {
 
     fn eol(&mut self) -> io::Result<()> {
         match self.peek()? {
-            Tok::NEWLINE => {
+            Tok::NEWLINE | Tok::EOF => {
                 self.eat();
-                Ok(())
-            }
-            Tok::EOF => {
-                if self.toks.len() > 1 {
-                    self.toks.pop();
-                }
                 Ok(())
             }
             _ => Err(self.err("expected end of line")),
@@ -858,47 +814,7 @@ impl<'a> Asm<'a> {
                         .find(|mac| self.str() == mac.name)
                         .copied()
                     {
-                        let file = self.tok().file();
-                        let pos = self.tok().pos();
-                        self.eat();
-                        let mut args = VecDeque::new();
-                        let mut arg = Vec::new();
-                        loop {
-                            match self.peek()? {
-                                tok @ (Tok::TERM | Tok::NEWLINE | Tok::EOF) => {
-                                    if !arg.is_empty() {
-                                        let arg = self.tok_int.intern(&arg);
-                                        args.push_back(arg);
-                                    }
-                                    if tok == Tok::TERM {
-                                        self.eat();
-                                    }
-                                    break;
-                                }
-                                Tok::IDENT => arg.push(MacroTok::Ident(self.str_intern())),
-                                Tok::STR => arg.push(MacroTok::Str(self.str_intern())),
-                                Tok::NUM => arg.push(MacroTok::Num(self.tok().num())),
-                                tok => arg.push(MacroTok::Tok(tok)),
-                            }
-                            self.eat();
-                            if self.peek()? == Tok::COMMA {
-                                self.eat();
-                                let iarg = self.tok_int.intern(&arg);
-                                args.push_back(iarg);
-                                arg.clear();
-                            }
-                        }
-                        self.unique += 1;
-                        self.toks.push(Box::new(MacroInvocation {
-                            inner: mac,
-                            unique: self.unique,
-                            index: 0,
-                            join_buf: String::new(),
-                            args,
-                            arg_index: 0,
-                            file,
-                            pos,
-                        }));
+                        self.macroinvoke(mac)?;
                         continue;
                     }
                     if seen_val {
@@ -953,12 +869,7 @@ impl<'a> Asm<'a> {
                     self.eat();
                     continue;
                 }
-                tok => {
-                    // we might be in a macro or something
-                    if (tok == Tok::EOF) && (self.toks.len() > 1) {
-                        self.toks.pop();
-                        continue;
-                    }
+                _ => {
                     if !seen_val {
                         return Err(self.err("expected value"));
                     }
@@ -1061,6 +972,7 @@ impl<'a> Asm<'a> {
 
     fn expect(&mut self, tok: Tok) -> io::Result<()> {
         if self.peek()? != tok {
+            dbg!("{}", self.peek()?);
             return Err(self.err("unexpected garbage"));
         }
         self.eat();
@@ -3000,38 +2912,7 @@ impl<'a> Asm<'a> {
                 self.toks.push(Box::new(lexer));
             }
             Dir::IF | Dir::IFDEF | Dir::IFNDEF => {
-                self.eat();
-                let expr = self.expr()?;
-                let skip = match dir {
-                    Dir::IF => self.const_expr(expr)? == 0,
-                    Dir::IFDEF => !matches!(expr, Expr::Const(_)),
-                    Dir::IFNDEF => matches!(expr, Expr::Const(_)),
-                    _ => unreachable!(),
-                };
-                if skip {
-                    let mut if_level = 0;
-                    loop {
-                        if self.peek()? == Tok::IDENT {
-                            if self.str_like(Dir::IF.0)
-                                || self.str_like(Dir::IFDEF.0)
-                                || self.str_like(Dir::IFNDEF.0)
-                                || self.str_like(Dir::STRUCT.0)
-                                || self.str_like(Dir::MACRO.0)
-                                || self.str_like(Dir::FOR.0)
-                            {
-                                if_level += 1;
-                            } else if self.str_like(Dir::END.0) {
-                                if if_level == 0 {
-                                    self.eat();
-                                    return Ok(());
-                                }
-                                if_level -= 1;
-                            }
-                        }
-                        self.eat();
-                    }
-                }
-                self.if_level += 1;
+                self.ifdirective(dir)?;
             }
             Dir::END => {
                 if self.if_level == 0 {
@@ -3078,6 +2959,87 @@ impl<'a> Asm<'a> {
         Ok(())
     }
 
+    fn macroinvoke(&mut self, mac: Macro<'a>) -> io::Result<()> {
+        let file = self.tok().file();
+        let pos = self.tok().pos();
+        self.eat();
+        let mut args = VecDeque::new();
+        let mut arg = Vec::new();
+        loop {
+            match self.peek()? {
+                tok @ (Tok::TERM | Tok::NEWLINE | Tok::EOF) => {
+                    if !arg.is_empty() {
+                        let arg = self.tok_int.intern(&arg);
+                        args.push_back(arg);
+                    }
+                    if tok == Tok::TERM {
+                        self.eat();
+                    }
+                    break;
+                }
+                Tok::IDENT => arg.push(MacroTok::Ident(self.str_intern())),
+                Tok::STR => arg.push(MacroTok::Str(self.str_intern())),
+                Tok::NUM => arg.push(MacroTok::Num(self.tok().num())),
+                tok => arg.push(MacroTok::Tok(tok)),
+            }
+            self.eat();
+            if self.peek()? == Tok::COMMA {
+                self.eat();
+                let iarg = self.tok_int.intern(&arg);
+                args.push_back(iarg);
+                arg.clear();
+            }
+        }
+        self.unique += 1;
+        self.toks.push(Box::new(MacroInvocation {
+            inner: mac,
+            unique: self.unique,
+            index: 0,
+            join_buf: String::new(),
+            args,
+            arg_index: 0,
+            file,
+            pos,
+        }));
+        Ok(())
+    }
+
+    fn ifdirective(&mut self, dir: Dir) -> io::Result<()> {
+        self.eat();
+        let expr = self.expr()?;
+        let skip = match dir {
+            Dir::IF => self.const_expr(expr)? == 0,
+            Dir::IFDEF => !matches!(expr, Expr::Const(_)),
+            Dir::IFNDEF => matches!(expr, Expr::Const(_)),
+            _ => unreachable!(),
+        };
+        if skip {
+            let mut if_level = 0;
+            loop {
+                if self.peek()? == Tok::IDENT {
+                    if self.str_like(Dir::IF.0)
+                        || self.str_like(Dir::IFDEF.0)
+                        || self.str_like(Dir::IFNDEF.0)
+                        || self.str_like(Dir::STRUCT.0)
+                        || self.str_like(Dir::MACRO.0)
+                        || self.str_like(Dir::FOR.0)
+                    {
+                        if_level += 1;
+                    } else if self.str_like(Dir::END.0) {
+                        if if_level == 0 {
+                            self.eat();
+                            return Ok(());
+                        }
+                        if_level -= 1;
+                    }
+                }
+                self.eat();
+            }
+        }
+        self.if_level += 1;
+        Ok(())
+    }
+
     fn structdef(&mut self) -> io::Result<()> {
         self.eat();
         if self.peek()? != Tok::IDENT {
@@ -3089,13 +3051,16 @@ impl<'a> Asm<'a> {
         }
         let pos = self.tok().pos();
         self.eat();
-        self.eol()?;
-        let label = Label::new(None, string);
+        let label = Label::new(Some(string), self.str_int.intern(".SIZE"));
         // TODO: check if struct already defined (similar to macro)
         let mut size = 0;
         let unit = self.str_int.intern("__STATIC__");
         let section = self.sections[self.section].name;
         loop {
+            if self.peek()? == Tok::NEWLINE {
+                self.eat();
+                continue;
+            }
             if (self.peek()? == Tok::IDENT) && self.str_like(Dir::END.0) {
                 self.eat();
                 break;
@@ -3104,6 +3069,27 @@ impl<'a> Asm<'a> {
                 return Err(self.err("expected field name"));
             }
             {
+                if self.str_like(".SIZE") {
+                    return Err(self.err(".SIZE is a reserved field name"));
+                }
+                // is this a macro?
+                if let Some(mac) = self
+                    .macros
+                    .iter()
+                    .find(|mac| self.str() == mac.name)
+                    .copied()
+                {
+                    self.macroinvoke(mac)?;
+                    continue;
+                }
+                // is this an if-directive?
+                if let Some(dir) = DIRECTIVES.iter().find(|dir| self.str() == dir.0).cloned() {
+                    // TODO: i dont think this works
+                    if let Dir::IF | Dir::IFDEF | Dir::IFNDEF = dir {
+                        self.ifdirective(dir)?;
+                        continue;
+                    }
+                }
                 let field = self.str_intern();
                 if !field.starts_with(".") {
                     return Err(self.err("field must have a local label"));
