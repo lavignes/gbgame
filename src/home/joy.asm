@@ -1,7 +1,7 @@
 ; vim: ft=basm
-?section "HOME"
-
 ?include "hardware.inc"
+
+?section "HOME"
 
 JoyUpdate::
     ; read directions
@@ -31,19 +31,19 @@ JoyUpdate::
     ; reset joypad
     ld a, (1 << HW_P1_BIT_GET_DIRECTION) | (1 << HW_P1_BIT_GET_ACTION)
     ldh [HW_P1], a
-    ; now we have the button states for this frame in l
+    ; Now we have the button states for this frame in `L`
     ; AND with the last frame to get the held buttons
     ldh a, [joyPressed]
     and a, l
     ldh [joyHeld], a
-    ; AND with cpl to get released buttons this frame
+    ; AND with complement to get released buttons this frame
     ld a, l
     cpl
     ld h, a
     ldh a, [joyPressed]
     and a, h
     ldh [joyReleased], a
-    ; finally update the buttons for the current frame
+    ; Finally update the buttons for the current frame
     ; XOR with the current pressed so filter out held
     ldh a, [joyPressed]
     xor a, l

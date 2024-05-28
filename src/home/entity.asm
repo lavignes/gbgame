@@ -6,8 +6,8 @@ ENTITY_BUF_SIZE = ENTITY_BUF_LEN * ENTITY.SIZE
 
 ?section "WRAM0"
 
-entityCount: ?res 1
 entityBuf: ?res ENTITY_BUF_SIZE
+entityCount: ?res 1
 
 ?section "HOME"
 

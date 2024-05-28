@@ -1,15 +1,15 @@
 ; vim: ft=basm
-?section "HOME"
-
 ?include "hardware.inc"
 
-;; call function at e:hl
+?section "HOME"
+
+;; Call function at e:hl
 ;
-; NOTE only use this to call functions that dont pass
+; NOTE Only use this to call functions that dont pass
 ; args via registers or stack
 FarCallHL::
     ldh a, [romBank]
-    ; is that bank already active?
+    ; Is that bank already active?
     ; TODO should I instead just panic?
     cp a, e
     jr nz, .SwitchBanks

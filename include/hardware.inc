@@ -39,22 +39,26 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; memory map
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-HW_MAP_ROM00_START = $0000
-HW_MAP_ROM00_SIZE  = $4000
-HW_MAP_ROMXX_START = $4000
-HW_MAP_ROMXX_SIZE  = $4000
-HW_MAP_VRAM_START  = $8000
-HW_MAP_VRAM_SIZE   = $2000
-HW_MAP_SRAM_START  = $A000
-HW_MAP_SRAM_SIZE   = $2000
-HW_MAP_WRAM0_START = $C000
-HW_MAP_WRAM0_SIZE  = $1000
-HW_MAP_WRAMX_START = $D000
-HW_MAP_WRAMX_SIZE  = $1000
-HW_MAP_OAM_START   = $FE00
-HW_MAP_OAM_SIZE    = $A0
+HW_MAP_ROM00_START    = $0000
+HW_MAP_ROM00_SIZE     = $4000
+HW_MAP_ROMXX_START    = $4000
+HW_MAP_ROMXX_SIZE     = $4000
+HW_MAP_VRAM_START     = $8000
+HW_MAP_VRAM_SIZE      = $2000
+HW_MAP_SRAM_START     = $A000
+HW_MAP_SRAM_SIZE      = $2000
+HW_MAP_WRAM0_START    = $C000
+HW_MAP_WRAM0_SIZE     = $1000
+HW_MAP_WRAMX_START    = $D000
+HW_MAP_WRAMX_SIZE     = $1000
+HW_MAP_OAM_START      = $FE00
+HW_MAP_OAM_SIZE       = $A0
+HW_MAP_WAVE_RAM_START = $FF30
+HW_MAP_WAVE_RAM_SIZE  = 16
+HW_MAP_HRAM_START     = $FF80
+HW_MAP_HRAM_SIZE      = $7E
 
-HW_MAP_MBC5_BANK_LO = $2222
+HW_MAP_MBC5_BANK_LO   = $2222
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; video
@@ -63,15 +67,32 @@ HW_MAP_MBC5_BANK_LO = $2222
 HW_SCREEN_WIDTH  = 160
 HW_SCREEN_HEIGHT = 144
 
+;; OAM
+?struct HW_OAM
+    .Y 1
+    .X 1
+    .Tile 1
+    .Attrs 1
+?end
+HW_OAM_ATTR_MASK_PALETTE = %11
+HW_OAM_ATTR_BIT_BANK     = 3
+HW_OAM_ATTR_DMG_PALETTE  = 4
+HW_OAM_ATTR_FLIP_X       = 5
+HW_OAM_ATTR_FLIP_Y       = 6
+HW_OAM_ATTR_PRIORITY     = 7
+?if (HW_OAM.SIZE * 40) != HW_MAP_OAM_SIZE
+    ?fail "OAM struct incorrectly sized!"
+?end
+
 ;; LCD control register
 HW_LCDC = $FF40
-HW_LCDC_BIT_BG_WIN_PRIORITY = 0
+HW_LCDC_BIT_BG_WIN_PRIORITY = 0 ; 0 = OBJs always above, 1 = Honor priority
 HW_LCDC_BIT_OBJ_ENABLE      = 1
-HW_LCDC_BIT_OBJ_SIZE        = 2
-HW_LCDC_BIT_BG_TILE_MAP     = 3
-HW_LCDC_BIT_TILE_DATA       = 4
+HW_LCDC_BIT_OBJ_SIZE        = 2 ; 0 = 8x8, 1 = 8x16
+HW_LCDC_BIT_BG_TILE_MAP     = 3 ; 0 = 9800..9BFF, 1 = 9C00..9FFF
+HW_LCDC_BIT_TILE_DATA       = 4 ; 0 = 8800..97FF, 1 = 8000..8FFF
 HW_LCDC_BIT_WIN_ENABLE      = 5
-HW_LCDC_BIT_WIN_TILE_MAP    = 6
+HW_LCDC_BIT_WIN_TILE_MAP    = 6 ; 0 = 9800..9BFF, 1 = 9C00..9FFF
 HW_LCDC_BIT_SCREEN_ENABLE   = 7
 
 ;; LCD status register
@@ -89,7 +110,7 @@ HW_SCX = $FF43
 
 ;; LCD horizontal line counter register
 ;;
-;; (read-only) holds a value between 0-153 (inclusive).
+;; (read-only) Holds a value between 0-153 (inclusive).
 ;; values >= 144 indicate v-blank
 HW_LY = $FF44
 HW_LY_VBLANK_START = HW_SCREEN_HEIGHT
@@ -97,34 +118,34 @@ HW_LY_VBLANK_END   = 153
 
 HW_LYC = $FF45
 
-;; dma page source
+;; DMA page source
 HW_DMA = $FF46
 
-;; dmg palettes
+;; DMG palettes
 HW_BGP = $FF47
 HW_OBP0 = $FF48
 HW_OBP1 = $FF49
 
-;; window scroll
+;; Window scroll
 HW_WY = $FF4A
 HW_WX = $FF4B
 
-;; bg palette index
+;; BG palette index
 HW_BCPS = $FF68
 HW_BCPS_BIT_INCREMENT = 7 ; auto-increment index on data write
 
-;; bg palette data
+;; BG palette data
 HW_BCPD = $FF69
 
-;; obj palette index
+;; OBJ palette index
 HW_OCPS = $FF6A
 HW_OCPS_BIT_INCREMENT = 7 ; auto-increment index on data write
 
-;; obj palette data
+;; OBJ palette data
 HW_OCPD = $FF6B
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; hdma
+;; HDMA
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 HW_HDMA1 = $FF51
@@ -137,17 +158,17 @@ HW_HDMA5 = $FF55
 ;; timer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; timer divider (always counting at 64 mcycles, resets to $00 on write)
-HW_DIV = $FF03
+;; Timer divider (Always counting at 64 mcycles, resets to $00 on write)
+HW_DIV = $FF04
 
-;; timer counter
-HW_TIMA = $FF04
+;; Timer counter
+HW_TIMA = $FF05
 
-;; timer modulo (reset value on interrupt)
-HW_TMA = $FF05
+;; Timer modulo (Reset value on interrupt)
+HW_TMA = $FF06
 
-;; timer control
-HW_TAC = $FF06
+;; Timer control
+HW_TAC = $FF07
 HW_TAC_MASK_RATE = %11
 HW_TAC_BIT_ENABLE = 2
 
@@ -157,119 +178,116 @@ HW_TAC_RATE_16_MCYCLES  = %10
 HW_TAC_RATE_64_MCYCLES  = %11
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; serial and ir
+;; Serial and IR
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; serial byte
+;; Serial byte
 HW_SB = $FF01
 
-;; serial control
+;; Serial control
 HW_SC = $FF02
 HW_SC_BIT_CLOCK_MASTER   = 0
 HW_SC_BIT_CLOCK_HI_SPEED = 1
 HW_SC_BIT_TX_ENABLE      = 7
 
-;; ir port
+;; IR port
 HW_RP = $FF56
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; sound
+;; Audio
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; ch1 sweep
+;; CH1 sweep
 HW_NR10 = $FF10
 
-;; ch1 length and duty cycle
+;; CH1 length and duty cycle
 HW_NR11 = $FF11
 
-;; ch1 volume and envelope
+;; CH1 volume and envelope
 HW_NR12 = $FF12
 
-;; ch1 period lo
+;; CH1 period lo
 HW_NR13 = $FF13
 
-;; ch1 period hi and control
+;; CH1 period hi and control
 HW_NR14 = $FF14
 HW_NR14_BIT_LENGTH_ENABLE = 6
 HW_NR14_BIT_TRIGGER       = 7
 
-;; ch2 length and duty cycle
+;; CH2 length and duty cycle
 HW_NR21 = $FF21
 
-;; ch2 volume and envelope
+;; CH2 volume and envelope
 HW_NR22 = $FF22
 
-;; ch2 period lo
+;; CH2 period lo
 HW_NR23 = $FF23
 
-;; ch2 period hi and control
+;; CH2 period hi and control
 HW_NR24 = $FF24
 
-;; ch3 DAC enable
+;; CH3 DAC enable
 HW_NR30 = $FF1A
 
-;; ch3 length
+;; CH3 length
 HW_NR31 = $FF1B
 
-;; ch3 output level
+;; CH3 output level
 HW_NR32 = $FF1C
 
-;; ch3 period lo
+;; CH3 period lo
 HW_NR33 = $FF1D
 
-;; ch3 period hi and control
+;; CH3 period hi and control
 HW_NR34 = $FF1E
 
-HW_WAVE_RAM_START = $FF30
-HW_WAVE_RAM_SIZE = 16
-
-;; ch4 length
+;; CH4 length
 HW_NR41 = $FF20
 
-;; ch4 volume and envelope
+;; CH4 volume and envelope
 HW_NR42 = $FF21
 
-;; ch4 frequency and randomness
+;; CH4 frequency and randomness
 HW_NR43 = $FF22
 
-;; ch4 control
+;; CH4 control
 HW_NR44 = $FF23
 
-;; audio master volume
+;; Audio master volume
 HW_NR50 = $FF24
 
-;; audio master panning
+;; Audio master panning
 HW_NR51 = $FF25
 
-;; audio master control
+;; Audio master control
 HW_NR52 = $FF26
-HW_NR52_BIT_CH1_ACTIVE    = 0 ; active means the channel is playing audio
+HW_NR52_BIT_CH1_ACTIVE    = 0 ; Active means the channel is playing audio
 HW_NR52_BIT_CH2_ACTIVE    = 1
 HW_NR52_BIT_CH3_ACTIVE    = 2
 HW_NR52_BIT_CH4_ACTIVE    = 3
 HW_NR52_BIT_MASTER_ENABLE = 7
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; misc
+;; Misc
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; joypad
+;; Joypad
 HW_P1 = $FF00
 HW_P1_BIT_GET_DIRECTION = 4
 HW_P1_BIT_GET_ACTION    = 5
 
-;; speed switcher
+;; CPU speed switcher
 HW_KEY1 = $FF4D
 HW_KEY1_BIT_PREPARE_SWITCH = 0
 HW_KEY1_BIT_CURRENT_SPEED  = 7
 
-;; vram bank
+;; VRAM bank
 HW_VBK = $FF4F
 
-;; wram bank
+;; WRAMX bank
 HW_SVBK = $FF70
 
-;; interrupt flags/enable
+;; Interrupt flags/enable
 HW_IF = $FF0F
 HW_IE = $FFFF
 HW_IF_BIT_VBLANK = 0

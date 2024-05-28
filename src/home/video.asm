@@ -1,7 +1,88 @@
 ; vim: ft=basm
+?include "hardware.inc"
+?include "color.inc"
+
+OAM_BUF_LEN = 40
+OAM_BUF_SIZE = HW_OAM.SIZE * OAM_BUF_LEN
+
+?section "OAMBUF"
+
+;; OAM source buffer
+oamBuf: ?res OAM_BUF_SIZE
+
+?section "HRAM"
+
+;; Holds the dma transfer routine
+dmaFunction:: ?res 10
+
+;; Whether vblank occurred
+vBlanked:: ?res 1
+
 ?section "HOME"
 
-?include "hardware.inc"
+;; DMA function that we copy to hram
+_TMP = *
+DMAFunction:
+    ld a, >oamBuf
+    ldh [HW_DMA], a
+    ld a, 40
+.Wait
+    dec a
+    jr nz, .Wait
+    ret
+DMAFunctionEnd:
+?if (* - _TMP) != 10
+    ?fail "DMA function too big!"
+?end
+
+BlackPalette:
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+    COLOR $00, $00, $00
+
+;; Initialize video sub-system
+VideoInit::
+    ; place the dma function into hram
+    ld hl, dmaFunction
+    ld de, DMAFunction
+    ld bc, DMAFunctionEnd - DMAFunction
+    call MemCopy
+    ; clear vram
+    ?for BANK, 0, 2
+        ld a, BANK
+        ldh [HW_VBK], a
+        ld hl, HW_MAP_VRAM_START
+        ld bc, HW_MAP_VRAM_SIZE
+        call MemZero
+    ?end
+    ; clear palettes
+    ; TODO we need a function to fade palettes, so we should reuse that
+    ?for INDEX, 0, 8
+        ld a, 1
+        ld c, a
+        ld a, INDEX
+        ld hl, BlackPalette
+        call VideoBGPaletteWrite
+        ld a, 1
+        ld c, a
+        ld a, INDEX
+        ld hl, BlackPalette
+        call VideoOBJPaletteWrite
+    ?end
+    xor a, a
+    ldh [HW_VBK], a
+    ldh [HW_WY], a
+    ldh [HW_WX], a
+    ldh [HW_SCY], a
+    ldh [HW_SCX], a
+    ldh [HW_LYC], a
+    ldh [HW_STAT], a
+    ld a, (1 << HW_LCDC_BIT_BG_WIN_PRIORITY) |\
+          (1 << HW_LCDC_BIT_OBJ_ENABLE) |\
+          (1 << HW_LCDC_BIT_OBJ_SIZE)
+    ldh [HW_LCDC], a
+    ret
 
 ; NOTE only call after disabling PPU interrupts
 ;
@@ -33,17 +114,7 @@ VideoWaitForVBlank::
     jr nz, .Wait
     ret
 
-;; waits for _any_ blank event
-;
-; TODO should I delete this?
-VideoWaitForAnyBlank::
-    ld hl, HW_STAT
-.Wait:
-    bit 2, [hl] ; all drawing modes have bit 2 set
-    jr nz, .Wait
-    ret
-
-;; copy c BG palettes from hl to palette index a
+;; Copy `C` BG palettes from `HL` to palette index `A`
 VideoBGPaletteWrite::
     sla c ; c *= 4
     sla c
@@ -66,7 +137,7 @@ VideoBGPaletteWrite::
     jr nz, .Loop
     ret
 
-;; copy c OBJ palettes from hl to palette index a
+;; copy `C` OBJ palettes from `HL` to palette index `A`
 VideoOBJPaletteWrite::
     sla c ; c *= 4
     sla c

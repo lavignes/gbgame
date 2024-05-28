@@ -11,7 +11,7 @@ DEBUG_INC = 1
             ld hl, \j .PanicMsg, \u
             ld bc, \j .PanicMsgEnd, \u - \j .PanicMsg, \u
         ?end
-        jp StartPanic
+        jp Panic
         ?if \# > 0
         \j .PanicMsg, \u:
             ?byte \1

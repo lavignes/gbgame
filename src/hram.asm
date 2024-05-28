@@ -1,15 +1,10 @@
 ; vim: ft=basm
 ?section "HRAM"
 
-;; holds the dma transfer routine
-dmaFunction:: ?res 10
-
 ;; scratch space
 tmp:: ?res 16
 
-;; vblank ocurred flag
-vBlanked:: ?res 1
-
+;; saved rom bank
 romBank::  ?res 1
 
 joyPressed::   ?res 1

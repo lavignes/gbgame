@@ -41,7 +41,7 @@ RstJpHL::
 ; $FF bytes will blow up :-)
 PAD_TO $38
 RstPanic::
-    jp StartRstPanic
+    jp PanicFromRst
 
 PAD_TO $40
 IntVBlank:
