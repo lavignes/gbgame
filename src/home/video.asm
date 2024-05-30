@@ -2,18 +2,15 @@
 ?include "hardware.inc"
 ?include "color.inc"
 
-OAM_BUF_LEN = 40
-OAM_BUF_SIZE = HW_OAM.SIZE * OAM_BUF_LEN
-
 ?section "OAMBUF"
 
 ;; OAM source buffer
-oamBuf: ?res OAM_BUF_SIZE
+oamBuf: ?res HW_MAP_OAM_SIZE
 
 ?section "HRAM"
 
 ;; Holds the dma transfer routine
-dmaFunction:: ?res 10
+dmaFunction: ?res 10
 
 ;; Whether vblank occurred
 vBlanked:: ?res 1
@@ -34,12 +31,6 @@ DMAFunctionEnd:
 ?if (* - _TMP) != 10
     ?fail "DMA function too big!"
 ?end
-
-BlackPalette:
-    COLOR $00, $00, $00
-    COLOR $00, $00, $00
-    COLOR $00, $00, $00
-    COLOR $00, $00, $00
 
 ;; Initialize video sub-system
 VideoInit::
@@ -62,12 +53,12 @@ VideoInit::
         ld a, 1
         ld c, a
         ld a, INDEX
-        ld hl, BlackPalette
+        ld hl, PaletteAllBlack
         call VideoBGPaletteWrite
         ld a, 1
         ld c, a
         ld a, INDEX
-        ld hl, BlackPalette
+        ld hl, PaletteAllBlack
         call VideoOBJPaletteWrite
     ?end
     xor a, a

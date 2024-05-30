@@ -3,8 +3,8 @@
 
 ?section "WRAM0"
 
-stackTop:: ?res 256
-stackBase::
+stackTop: ?res 256
+stackBase:
 
 ?section "HOME"
 
@@ -38,7 +38,7 @@ Start::
     ld a, 1
     ldh [romBank], a
     ld [HW_MAP_MBC5_BANK_LO], a
-    ; we need to be careful and clear wram0
+    ; we need to be careful and clear WRAM0
     ; without making a call since we'll clobber the stack
     ld hl, HW_MAP_WRAM0_START
     ld bc, HW_MAP_WRAM0_SIZE
@@ -51,7 +51,7 @@ Start::
     dec bc
     jr .WRAM0
 .WRAMX:
-    ; clear wramx
+    ; clear WRAMX
     ?for BANK, 1, 8
         ld a, BANK
         ldh [HW_SVBK], a
@@ -59,7 +59,7 @@ Start::
         ld bc, HW_MAP_WRAMX_SIZE
         call MemZero
     ?end
-    ; use wram1
+    ; use WRAM1
     ld a, 1
     ldh [HW_SVBK], a
     ; clear timers

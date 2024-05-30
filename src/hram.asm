@@ -2,9 +2,9 @@
 ?section "HRAM"
 
 ;; scratch space
-tmp:: ?res 16
+scratch:: ?res 16
 
-;; saved rom bank
+;; saved ROMX bank
 romBank::  ?res 1
 
 joyPressed::   ?res 1

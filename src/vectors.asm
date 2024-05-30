@@ -9,11 +9,11 @@
         nop
     ?end
     ?if * != \1
-        ?fail "overflowed!"
+        ?fail "Overflowed!"
     ?end
 ?end ; PAD_TO
 
-;; jump to address offset by a in table follwing the call
+;; Jump to address offset by `A` in a pointer table follwing the rst
 RstJumpTable::
     add a, a  ; multiply by 2 since addrs are 16 bits
     pop hl    ; pop return address into hl
@@ -26,7 +26,7 @@ RstJumpTable::
     ld l, a
     jp hl
 
-;; short-hand for calling FarCallHL
+;; Short-hand for calling `FarCallHL`
 PAD_TO $10
 RstFarCall::
     jp FarCallHL

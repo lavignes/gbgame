@@ -73,14 +73,15 @@ HW_SCREEN_HEIGHT = 144
     .X 1
     .Tile 1
     .Attrs 1
-?end
-HW_OAM_ATTR_MASK_PALETTE = %11
-HW_OAM_ATTR_BIT_BANK     = 3
-HW_OAM_ATTR_DMG_PALETTE  = 4
-HW_OAM_ATTR_FLIP_X       = 5
-HW_OAM_ATTR_FLIP_Y       = 6
-HW_OAM_ATTR_PRIORITY     = 7
-?if (HW_OAM.SIZE * 40) != HW_MAP_OAM_SIZE
+?end ; HW_OAM
+HW_OAM_LEN = 40 ; Logical number of OAM entries
+HW_OAM_ATTR_MASK_PALETTE    = %11
+HW_OAM_ATTR_BIT_BANK        = 3   ; VRAM bank
+HW_OAM_ATTR_BIT_DMG_PALETTE = 4
+HW_OAM_ATTR_BIT_FLIP_X      = 5
+HW_OAM_ATTR_BIT_FLIP_Y      = 6
+HW_OAM_ATTR_BIT_PRIORITY    = 7   ; 1 = BG and WIN colors 1-3 draw above
+?if (HW_OAM.SIZE * HW_OAM_LEN) != HW_MAP_OAM_SIZE
     ?fail "OAM struct incorrectly sized!"
 ?end
 

@@ -20,16 +20,21 @@ DEBUG_INC = 1
     ?end
 ?end ; PANIC
 
-?macro PANIC_EQ
+?macro PANIC_A_EQ
     ?ifdef DEBUG
         push af
         ld a, \1
         cp a, \2
         jr nz, \j .Ok, \u
-        PANIC \3
+        ?if \# > 2
+            PANIC \3
+        ?end
+        ?if \# == 2
+            PANIC
+        ?end
     \j .Ok, \u:
         pop af
     ?end
-?end ; PANIC_EQ
+?end ; PANIC_A_EQ
 
 ?end ; DEBUG_INC

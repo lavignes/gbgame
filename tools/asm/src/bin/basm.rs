@@ -972,7 +972,6 @@ impl<'a> Asm<'a> {
 
     fn expect(&mut self, tok: Tok) -> io::Result<()> {
         if self.peek()? != tok {
-            dbg!("{}", self.peek()?);
             return Err(self.err("unexpected garbage"));
         }
         self.eat();
