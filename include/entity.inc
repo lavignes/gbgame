@@ -3,10 +3,10 @@
 ENTITY_INC = 1
 
 ?macro _ENTITY_COMMON
-    .TYPE 1
+    .TYPE  1
     .FLAGS 1
-    .Y 2
-    .X 2
+    .Y     2
+    .X     2
 ?end
 
 ?struct ENTITY

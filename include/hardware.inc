@@ -69,9 +69,9 @@ HW_SCREEN_HEIGHT = 144
 
 ;; OAM
 ?struct HW_OAM
-    .Y 1
-    .X 1
-    .Tile 1
+    .Y     1
+    .X     1
+    .Tile  1
     .Attrs 1
 ?end ; HW_OAM
 HW_OAM_LEN = 40 ; Logical number of OAM entries

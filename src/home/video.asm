@@ -71,7 +71,8 @@ VideoInit::
     ldh [HW_STAT], a
     ld a, (1 << HW_LCDC_BIT_BG_WIN_PRIORITY) |\
           (1 << HW_LCDC_BIT_OBJ_ENABLE) |\
-          (1 << HW_LCDC_BIT_OBJ_SIZE)
+          (1 << HW_LCDC_BIT_OBJ_SIZE) |\
+          (1 << HW_LCDC_BIT_WIN_TILE_MAP)
     ldh [HW_LCDC], a
     ret
 
