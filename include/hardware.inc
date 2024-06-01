@@ -28,7 +28,7 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?byte "BASM"   ; manufacturer code
 
     ?byte  \2      ; compat
-    ?dbyte $0000   ; license code
+    ?word  $0000   ; license code
     ?byte  $00     ; no sgb
     ?byte  \3      ; MBC type
     ?byte  \4      ; ROM size

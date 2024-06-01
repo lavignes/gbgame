@@ -16,8 +16,7 @@ syn keyword basmOpcode daa cpl ccf scf nop halt stop di ei rlca rla rrca rra rlc
 syn keyword basmOpcode sla sra srl bit set res jp jr call rst ret reti
 
 syn match basmDirective "?byte"
-syn match basmDirective "?dbyte"
-syn match basmDirective "?tbyte"
+syn match basmDirective "?word"
 syn match basmDirective "?section"
 syn match basmDirective "?include"
 syn match basmDirective "?if"

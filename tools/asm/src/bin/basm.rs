@@ -2812,7 +2812,7 @@ impl<'a> Asm<'a> {
                 }
                 self.eol()?;
             }
-            Dir::DBYTE => {
+            Dir::WORD => {
                 self.eat();
                 loop {
                     let pos = self.tok().pos();
@@ -2826,27 +2826,6 @@ impl<'a> Asm<'a> {
                         }
                     }
                     self.add_pc(2)?;
-                    if self.peek()? != Tok::COMMA {
-                        break;
-                    }
-                    self.eat();
-                }
-                self.eol()?;
-            }
-            Dir::TBYTE => {
-                self.eat();
-                loop {
-                    let pos = self.tok().pos();
-                    let expr = self.expr()?;
-                    if self.emit {
-                        if let Ok(value) = self.const_expr(expr) {
-                            self.write(&self.range_24(value)?.to_le_bytes());
-                        } else {
-                            self.write(&[0xFD, 0xFD, 0xFD]);
-                            self.reloc(0, 3, expr, pos);
-                        }
-                    }
-                    self.add_pc(3)?;
                     if self.peek()? != Tok::COMMA {
                         break;
                     }
@@ -3408,8 +3387,7 @@ struct Dir(&'static str);
 
 impl Dir {
     const BYTE: Self = Self("?BYTE");
-    const DBYTE: Self = Self("?DBYTE");
-    const TBYTE: Self = Self("?TBYTE");
+    const WORD: Self = Self("?WORD");
     const SECTION: Self = Self("?SECTION");
     const INCLUDE: Self = Self("?INCLUDE");
     const IF: Self = Self("?IF");
@@ -3425,8 +3403,7 @@ impl Dir {
 
 const DIRECTIVES: &[Dir] = &[
     Dir::BYTE,
-    Dir::DBYTE,
-    Dir::TBYTE,
+    Dir::WORD,
     Dir::SECTION,
     Dir::INCLUDE,
     Dir::IF,
