@@ -16,7 +16,7 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?byte $BB, $BB, $67, $63, $6E, $0E, $EC, $CC
     ?byte $DD, $DC, $99, $9F, $BB, $B9, $33, $3E
 
-    ?byte \1       ; title
+    ?byte \1       ; Title
 
     ?if ?len \1 > 11
         ?fail "game title too long"
@@ -25,19 +25,19 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
         ?byte $00
     ?end
 
-    ?byte "BASM"   ; manufacturer code
+    ?byte "BASM"   ; Manufacturer code
 
-    ?byte  \2      ; compat
-    ?word  $0000   ; license code
-    ?byte  $00     ; no sgb
+    ?byte  \2      ; Compat
+    ?word  $0000   ; License code
+    ?byte  $00     ; No SGB
     ?byte  \3      ; MBC type
     ?byte  \4      ; ROM size
     ?byte  \5      ; SRAM size
-    ?byte  $01     ; international
+    ?byte  $01     ; International
 ?end ; HW_ROM_HEADER
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; memory map
+;; Memory map
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 HW_MAP_ROM00_START    = $0000
 HW_MAP_ROM00_SIZE     = $4000
@@ -61,7 +61,7 @@ HW_MAP_HRAM_SIZE      = $7E
 HW_MAP_MBC5_BANK_LO   = $2222
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; video
+;; Video
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 HW_SCREEN_WIDTH  = 160
@@ -156,7 +156,7 @@ HW_HDMA4 = $FF54
 HW_HDMA5 = $FF55
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; timer
+;; Timer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Timer divider (Always counting at 64 mcycles, resets to $00 on write)

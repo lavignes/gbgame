@@ -9,17 +9,17 @@ stackBase:
 ?section "HOME"
 
 DoubleSpeedMode:
-    ; exit if already in double speed mode
+    ; Exit if already in double speed mode
     ld hl, HW_KEY1
     bit HW_KEY1_BIT_CURRENT_SPEED, [hl]
     ret nz
-    ; disable all interrupt flags (stop acts really weird without these)
+    ; Disable all interrupt flags (stop acts really weird without these)
     xor a, a
     ldh [HW_IE], a
     ldh [HW_IF], a
-    ; prepare speed switch
+    ; Prepare speed switch
     set HW_KEY1_BIT_PREPARE_SWITCH, [hl]
-    ; do weird write to joypad and stop to perform the switch
+    ; Do weird write to joypad GPIO and stop to perform the switch
     ld a, (1 << HW_P1_BIT_GET_ACTION) | (1 << HW_P1_BIT_GET_DIRECTION)
     ldh [HW_P1], a
     stop
@@ -30,15 +30,15 @@ Start::
     ld sp, stackBase
     call VideoDisable
     call DoubleSpeedMode
-    ; clear hram
+    ; Clear HRAM
     ld hl, HW_MAP_HRAM_START
     ld bc, HW_MAP_HRAM_SIZE
     call MemZero
-    ; initialize the current rom bank
+    ; Initialize the current ROM bank
     ld a, 1
     ldh [romBank], a
     ld [HW_MAP_MBC5_BANK_LO], a
-    ; we need to be careful and clear WRAM0
+    ; We need to be careful and clear WRAM0
     ; without making a call since we'll clobber the stack
     ld hl, HW_MAP_WRAM0_START
     ld bc, HW_MAP_WRAM0_SIZE
@@ -51,7 +51,7 @@ Start::
     dec bc
     jr .WRAM0
 .WRAMX:
-    ; clear WRAMX
+    ; Clear WRAMX
     ?for BANK, 1, 8
         ld a, BANK
         ldh [HW_SVBK], a
@@ -59,21 +59,22 @@ Start::
         ld bc, HW_MAP_WRAMX_SIZE
         call MemZero
     ?end
-    ; use WRAM1
+    ; Use WRAM1
     ld a, 1
     ldh [HW_SVBK], a
-    ; clear timers
+    ; Clear timers
     xor a, a
     ldh [HW_TMA], a
     ldh [HW_TAC], a
     ldh [HW_DIV], a
-    ; clear serial
+    ; Clear serial
     ldh [HW_SC], a
-    ; init subsystems
+    ; Init subsystems
     call VideoInit
     ;call AudioInit
 
     ei
+    call VideoEnable
 .Halt:
     halt
     jr .Halt

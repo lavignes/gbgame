@@ -1,6 +1,12 @@
 ; vim: ft=basm
 ?include "hardware.inc"
 
+?section "HRAM"
+
+joyPressed::   ?res 1
+joyHeld::      ?res 1
+joyReleased::  ?res 1
+
 ?section "HOME"
 
 JoyUpdate::

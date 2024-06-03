@@ -17,16 +17,16 @@ Panic::
     ; TODO Need to disable video, load font, disable interrupts,
     ; and re-enable video here
 .SendByte:
-    ; no more chars?
+    ; No more chars?
     ld a, c
     or a, b
     jr z, .Halt
 .Wait:
-    ; are we still txing?
+    ; Are we still TX-ing?
     ld a, [HW_SC]
     bit HW_SC_BIT_TX_ENABLE, a
     jr nz, .Wait
-    ; send next char
+    ; Send next char
     ldi a, [hl]
     dec bc
     ldh [HW_SB], a

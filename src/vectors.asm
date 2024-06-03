@@ -1,7 +1,7 @@
 ; vim: ft=basm
 ?section "VECTORS"
 
-; naive padding macro. the best way to really ensure this
+; Naive padding macro. The best way to really ensure this
 ; is to place each interrupt in a different section via the
 ; linker
 ?macro PAD_TO
@@ -15,8 +15,8 @@
 
 ;; Jump to address offset by `A` in a pointer table follwing the rst
 RstJumpTable::
-    add a, a  ; multiply by 2 since addrs are 16 bits
-    pop hl    ; pop return address into hl
+    add a, a  ; Multiply by 2 since addrs are 16 bits
+    pop hl    ; pop return address into HL
     add a, l
     ld l, a
     jr nc, .NoCarry
@@ -31,8 +31,9 @@ PAD_TO $10
 RstFarCall::
     jp FarCallHL
 
+;; Call `HL`
 PAD_TO $18
-RstJpHL::
+RstCall::
     jp hl
 
 ; TODO space for more rst
@@ -45,6 +46,8 @@ RstPanic::
 
 PAD_TO $40
 IntVBlank:
+    ; We de-couple game loop from rendering by have a tight vblank
+    ; interrupt that simply sets a flag. 
     push af
     ld a, 1
     ldh [vBlanked], a

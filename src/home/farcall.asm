@@ -1,6 +1,11 @@
 ; vim: ft=basm
 ?include "hardware.inc"
 
+?section "HRAM"
+
+;; Saved ROMX bank
+romBank::  ?res 1
+
 ?section "HOME"
 
 ;; Call function at e:hl
@@ -20,7 +25,7 @@ FarCallHL::
     ; switch banks
     ldh [romBank], a
     ld [HW_MAP_MBC5_BANK_LO], a
-    jp hl
+    jp hl ; TODO dont we need to rst RstCall?
     ; restore bank and return
     pop af
     ld [romBank], a

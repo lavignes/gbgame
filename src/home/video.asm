@@ -34,7 +34,7 @@ DMAFunctionEnd:
 
 ;; Initialize video sub-system
 VideoInit::
-    ; place the dma function into hram
+    ; Place the DMA function into HRAM
     ld hl, dmaFunction
     ld de, DMAFunction
     ld bc, DMAFunctionEnd - DMAFunction
@@ -47,7 +47,7 @@ VideoInit::
         ld bc, HW_MAP_VRAM_SIZE
         call MemZero
     ?end
-    ; clear palettes
+    ; Clear palettes
     ; TODO we need a function to fade palettes, so we should reuse that
     ?for INDEX, 0, 8
         ld a, 1
@@ -71,8 +71,7 @@ VideoInit::
     ldh [HW_STAT], a
     ld a, (1 << HW_LCDC_BIT_BG_WIN_PRIORITY) |\
           (1 << HW_LCDC_BIT_OBJ_ENABLE) |\
-          (1 << HW_LCDC_BIT_OBJ_SIZE) |\
-          (1 << HW_LCDC_BIT_WIN_TILE_MAP)
+          (1 << HW_LCDC_BIT_OBJ_SIZE)
     ldh [HW_LCDC], a
     ret
 
@@ -80,14 +79,14 @@ VideoInit::
 ;
 ; TODO should I therefore automatically disable interrupts?
 VideoDisable::
-    ; already disabled?
+    ; Already disabled?
     ld hl, HW_LCDC
     bit HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret z
 
     call VideoWaitForVBlank
 
-    ; disable screen
+    ; Disable screen
     ld hl, HW_LCDC
     res HW_LCDC_BIT_SCREEN_ENABLE, [hl]
     ret
@@ -98,7 +97,7 @@ VideoEnable::
     ret
 
 VideoWaitForVBlank::
-    ; wait for vblank
+    ; Wait for vblank
     ld hl, HW_STAT
 .Wait:
     ld a, [hl]
@@ -108,19 +107,19 @@ VideoWaitForVBlank::
 
 ;; Copy `C` BG palettes from `HL` to palette index `A`
 VideoBGPaletteWrite::
-    sla c ; c *= 4
+    sla c ; C *= 4
     sla c
-    add a, a ; a *= 8
+    add a, a ; A *= 8
     add a, a
     add a, a
-    ; load pal index
+    ; Load pal index
     ld de, HW_BCPS
     set HW_BCPS_BIT_INCREMENT, a ; auto-increment
     ld [de], a
-    ; de is now HW_BCPD
+    ; DE is now HW_BCPD
     inc de
 .Loop:
-    ; each iteration copies 1 16-bit color
+    ; Each iteration copies 1 16-bit color
     ldi a, [hl]
     ld [de], a
     ldi a, [hl]
@@ -131,15 +130,15 @@ VideoBGPaletteWrite::
 
 ;; copy `C` OBJ palettes from `HL` to palette index `A`
 VideoOBJPaletteWrite::
-    sla c ; c *= 4
+    sla c ; C *= 4
     sla c
-    add a, a ; a *= 8
+    add a, a ; A *= 8
     add a, a
     add a, a
-    ; load pal index
+    ; Load pal index
     ld de, HW_OCPS
     set HW_OCPS_BIT_INCREMENT, a ; auto-increment
     ld [de], a
-    ; de is now HW_OCPD
+    ; DE is now HW_OCPD
     inc de
     jr VideoBGPaletteWrite.Loop
