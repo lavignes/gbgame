@@ -52,8 +52,8 @@ Start::
     jr .WRAM0
 .WRAMX:
     ; Clear WRAMX
-    ?for BANK, 1, 8
-        ld a, BANK
+    ?for BANK, 8
+        ld a, BANK+1
         ldh [HW_SVBK], a
         ld hl, HW_MAP_WRAMX_START
         ld bc, HW_MAP_WRAMX_SIZE

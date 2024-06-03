@@ -21,7 +21,7 @@ HW_ROM_HEADER_SRAM_SIZE_128KB = $04
     ?if ?len \1 > 11
         ?fail "game title too long"
     ?end
-    ?for \u, 0, 11 - ?len \1
+    ?for \u, 11 - ?len \1
         ?byte $00
     ?end
 

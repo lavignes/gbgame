@@ -5,7 +5,7 @@
 ; is to place each interrupt in a different section via the
 ; linker
 ?macro PAD_TO
-    ?for \u, 0, \1 - *
+    ?for \u, \1 - *
         nop
     ?end
     ?if * != \1

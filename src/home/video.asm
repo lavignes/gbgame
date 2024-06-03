@@ -40,7 +40,7 @@ VideoInit::
     ld bc, DMAFunctionEnd - DMAFunction
     call MemCopy
     ; clear vram
-    ?for BANK, 0, 2
+    ?for BANK, 2
         ld a, BANK
         ldh [HW_VBK], a
         ld hl, HW_MAP_VRAM_START
@@ -49,7 +49,7 @@ VideoInit::
     ?end
     ; Clear palettes
     ; TODO we need a function to fade palettes, so we should reuse that
-    ?for INDEX, 0, 8
+    ?for INDEX, 8
         ld a, 1
         ld c, a
         ld a, INDEX

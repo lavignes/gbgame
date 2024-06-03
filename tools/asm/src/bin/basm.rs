@@ -3201,14 +3201,8 @@ impl<'a> Asm<'a> {
         }
         self.eat();
         self.expect(Tok::COMMA)?;
-        let start = self.expr()?;
-        let start = self.const_expr(start)?;
-        self.expect(Tok::COMMA)?;
         let end = self.expr()?;
         let end = self.const_expr(end)?;
-        if start > end {
-            return Err(self.err("loop start is > end"));
-        }
         let mut toks = Vec::new();
         let mut if_level = 0;
         loop {
@@ -3272,7 +3266,7 @@ impl<'a> Asm<'a> {
             toks,
             index: 0,
             join_buf: String::new(),
-            iter: start as usize,
+            iter: 0,
             end: end as usize,
             file,
             pos,
